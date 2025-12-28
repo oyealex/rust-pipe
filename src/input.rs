@@ -49,37 +49,25 @@ impl Input {
                 todo!()
             }
             Input::Of { values } => Box::new(values.into_iter().map(Item::String)),
-            Input::Gen { start, end, included, step } => Box::new(
-                if step > 0 {
-                    range_to_iter(start, end, included, step)
-                } else {
-                    range_to_iter(if included { end } else { end + 1 }, start, true, step)
-                }
-                .map(|x| Item::Integer(x)),
-            ),
+            Input::Gen { start, end, included, step } => {
+                Box::new(range_to_iter(start, end, included, step).map(|x| Item::Integer(x)))
+            }
         }
     }
 }
 
-#[inline]
-fn range_to_iter(start: Integer, end: Integer, included: bool, step: Integer) -> Box<dyn Iterator<Item = Integer>> {
-    if step > 0 {
-        Box::new(IntegerIter { start, end, included, step, next: start })
-    } else {
-        let (start, end) = (if included { end + 1 } else { end }, start);
-        Box::new(
-            IntegerIter { start: end, end: start, included, step: -step, next: if included { start } else { start - 1 } - step }
-                .rev(),
-        )
-    }
-}
-
-#[test]
-fn test_range_to_iter() {
-    println!("{:?}", range_to_iter(0, 10, false, 1).collect::<Vec<_>>());
-    println!("{:?}", range_to_iter(0, 10, true, 2).collect::<Vec<_>>());
-    println!("{:?}", range_to_iter(0, 10, false, -1).collect::<Vec<_>>());
-    println!("{:?}", range_to_iter(0, 10, true, -2).collect::<Vec<_>>());
+fn range_to_iter(
+    start: Integer, end: Integer, included: bool, step: Integer,
+) -> Box<dyn DoubleEndedIterator<Item = Integer>> {
+    let iter = IntegerIter {
+        start,
+        end,
+        included,
+        step: Integer::abs(step),
+        next: start,
+        next_back: if included { end } else { end - 1 },
+    };
+    if step < 0 { Box::new(iter.rev()) } else { Box::new(iter) }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -89,29 +77,81 @@ struct IntegerIter {
     included: bool,
     step: Integer,
     next: Integer,
+    next_back: Integer,
 }
 
 impl Iterator for IntegerIter {
     type Item = Integer;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // dbg!(&self);
-        let res = if self.included && self.next > self.end || !self.included && self.next >= self.end {
-            None
+        if self.next >= self.start
+            && (self.included && self.next <= self.end || !self.included && self.next < self.end)
+            && self.next <= self.next_back
+        {
+            let res = Some(self.next);
+            self.next += self.step;
+            res
         } else {
-            Some(self.next)
-        };
-        self.next += if res.is_none() { 0 } else { self.step };
-        res
+            None
+        }
     }
 }
 
 impl DoubleEndedIterator for IntegerIter {
     fn next_back(&mut self) -> Option<Self::Item> {
-        // dbg!(&self);
-        let pre = self.next - self.step;
-        let res = if pre < self.start { None } else { Some(pre) };
-        self.next = if res.is_none() { self.next } else { pre };
-        res
+        if self.next_back >= self.start
+            && (self.included && self.next_back <= self.end || !self.included && self.next_back < self.end)
+            && self.next_back >= self.next
+        {
+            let res = Some(self.next_back);
+            self.next_back -= self.step;
+            res
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+mod iter_tests {
+    use super::*;
+
+    #[test]
+    fn test_positive() {
+        assert_eq!(range_to_iter(0, 10, false, 1).collect::<Vec<_>>(), (0..10).collect::<Vec<_>>());
+        assert_eq!(range_to_iter(0, 10, true, 1).collect::<Vec<_>>(), (0..=10).collect::<Vec<_>>());
+        assert_eq!(range_to_iter(0, 10, false, 2).collect::<Vec<_>>(), (0..10).step_by(2).collect::<Vec<_>>());
+        assert_eq!(range_to_iter(0, 10, true, 2).collect::<Vec<_>>(), (0..=10).step_by(2).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn test_negative() {
+        assert_eq!(range_to_iter(0, 10, false, -1).collect::<Vec<_>>(), (0..10).rev().collect::<Vec<_>>());
+        assert_eq!(range_to_iter(0, 10, true, -1).collect::<Vec<_>>(), (0..=10).rev().collect::<Vec<_>>());
+        assert_eq!(range_to_iter(0, 10, false, -2).collect::<Vec<_>>(), (0..10).rev().step_by(2).collect::<Vec<_>>());
+        assert_eq!(range_to_iter(0, 10, true, -2).collect::<Vec<_>>(), (0..=10).rev().step_by(2).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn test_empty() {
+        assert_eq!(range_to_iter(0, 0, false, 1).collect::<Vec<_>>(), (0..0).collect::<Vec<_>>());
+        assert_eq!(range_to_iter(0, 0, true, 1).collect::<Vec<_>>(), (0..=0).collect::<Vec<_>>());
+        assert_eq!(range_to_iter(0, 0, false, 2).collect::<Vec<_>>(), (0..0).step_by(2).collect::<Vec<_>>());
+        assert_eq!(range_to_iter(0, 0, true, 2).collect::<Vec<_>>(), (0..=0).step_by(2).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn test_reverted_range() {
+        assert_eq!(range_to_iter(10, 0, false, 1).collect::<Vec<_>>(), (10..0).collect::<Vec<_>>());
+        assert_eq!(range_to_iter(10, 0, true, 1).collect::<Vec<_>>(), (10..=0).collect::<Vec<_>>());
+        assert_eq!(range_to_iter(10, 0, false, 2).collect::<Vec<_>>(), (10..0).step_by(2).collect::<Vec<_>>());
+        assert_eq!(range_to_iter(10, 0, true, 2).collect::<Vec<_>>(), (10..=0).step_by(2).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn test_zero_step() {
+        assert_eq!(range_to_iter(0, 0, false, 0).next().is_none(), true);
+        assert_eq!(range_to_iter(0, 1, false, 0).take(10).collect::<Vec<_>>(), vec![0; 10]);
+        assert_eq!(range_to_iter(0, 1, false, 0).take(100).collect::<Vec<_>>(), vec![0; 100]);
     }
 }

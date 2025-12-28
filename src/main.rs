@@ -15,7 +15,7 @@ pub(crate) type Integer = i64;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use nom::Parser;
-    let input = "gen 0,10,-1 ";
+    let input = "gen -10,10,-10 ";
 
     let (remaining, (input, output)) = parse::parse(input)?;
     println!("remaining: {:?}", remaining);
