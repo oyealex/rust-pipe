@@ -42,7 +42,6 @@ fn parse_gen(input: &str) -> InputResult<'_> {
 }
 
 fn parse_range_in_gen(input: &str) -> InputResult<'_> {
-    // TODO 2025-12-27 01:43 如果步长为0，给出更明显的错误提示。
     map(
         alt((
             (parse_integer, char(','), char('='), parse_integer, char(','), verify(parse_integer, |s| *s != 0)), // 0,=10,2

@@ -2,6 +2,7 @@ use crate::Integer;
 use std::fs::File;
 use std::io;
 use std::io::{BufRead, BufReader};
+use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) enum Item {
@@ -23,18 +24,43 @@ pub(crate) enum Input {
     Gen { start: Integer, end: Integer, included: bool, step: Integer },
 }
 
-impl Input {
-    pub(crate) fn iter(self) -> Box<dyn Iterator<Item = Item>> {
+pub(crate) enum Pipe {
+    Unbounded(Box<dyn Iterator<Item = Item>>),
+    Bounded(Box<dyn DoubleEndedIterator<Item = Item>>),
+}
+
+impl Pipe {
+    pub(crate) fn op_map(self, f: impl FnMut(Item) -> Item + 'static) -> Pipe {
         match self {
-            Input::StdIn => Box::new(
+            Pipe::Unbounded(iter) => Pipe::Unbounded(Box::new(iter.map(f))),
+            Pipe::Bounded(iter) => Pipe::Unbounded(Box::new(iter.map(f))),
+        }
+    }
+}
+
+impl Iterator for Pipe {
+    type Item = Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Pipe::Unbounded(iter) => iter.next(),
+            Pipe::Bounded(iter) => iter.next(),
+        }
+    }
+}
+
+impl Input {
+    pub(crate) fn pipe(self) -> Pipe {
+        match self {
+            Input::StdIn => Pipe::Unbounded(Box::new(
                 io::stdin()
                     .lock()
                     .lines()
                     .into_iter()
                     .take_while(Result::is_ok)
                     .map(|line| Item::String(line.unwrap())),
-            ),
-            Input::File { files } => Box::new(
+            )),
+            Input::File { files } => Pipe::Unbounded(Box::new(
                 files
                     .into_iter()
                     .map(File::open)
@@ -44,13 +70,13 @@ impl Input {
                     .flat_map(|reader| BufRead::lines(reader).into_iter())
                     .take_while(Result::is_ok)
                     .map(|line| Item::String(line.unwrap())),
-            ),
+            )),
             Input::Clip => {
                 todo!()
             }
-            Input::Of { values } => Box::new(values.into_iter().map(Item::String)),
+            Input::Of { values } => Pipe::Bounded(Box::new(values.into_iter().map(Item::String))),
             Input::Gen { start, end, included, step } => {
-                Box::new(range_to_iter(start, end, included, step).map(|x| Item::Integer(x)))
+                Pipe::Bounded(Box::new(range_to_iter(start, end, included, step).map(|x| Item::Integer(x))))
             }
         }
     }
@@ -150,6 +176,8 @@ mod iter_tests {
 
     #[test]
     fn test_zero_step() {
+        let option = range_to_iter(0, 10, false, 2).last();
+        println!("{option:?}");
         assert_eq!(range_to_iter(0, 0, false, 0).next().is_none(), true);
         assert_eq!(range_to_iter(0, 1, false, 0).take(10).collect::<Vec<_>>(), vec![0; 10]);
         assert_eq!(range_to_iter(0, 1, false, 0).take(100).collect::<Vec<_>>(), vec![0; 100]);

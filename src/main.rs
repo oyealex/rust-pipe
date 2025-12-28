@@ -15,15 +15,13 @@ pub(crate) type Integer = i64;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use nom::Parser;
-    let input = "gen -10,10,-10 ";
+    let input = "of [ abc def ghi 123 ] upper ";
 
-    let (remaining, (input, output)) = parse::parse(input)?;
+    let (remaining, (input, ops, output)) = parse::parse(input)?;
     println!("remaining: {:?}", remaining);
     println!("input: {:?}", input);
+    println!("ops: {:?}", ops);
     println!("output: {:?}", output);
-    input.iter().for_each(|item| match item {
-        Item::Integer(value) => println!(">> int: {:?}", value),
-        Item::String(value) => println!(">> str: {:?}", value),
-    });
+    output.handle(ops.into_iter().fold(input.pipe(), |pipe, op| op.wrap(pipe)));
     Ok(())
 }

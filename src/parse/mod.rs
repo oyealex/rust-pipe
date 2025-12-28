@@ -21,9 +21,11 @@ pub(crate) type ParserError<'a> = VerboseError<&'a str>;
 
 /// 重新导出解析整数的函数
 pub(crate) use nom::character::complete::i64 as parse_integer;
+use crate::op::Op;
+use crate::parse::op::parse_ops;
 
-pub(crate) fn parse(input: &str) -> IResult<&str, (Input, /*Vec<Op>,*/ Output), VerboseError<&str>> {
-    (parse_input, /*parse_ops,*/ parse_out).parse(input)
+pub(crate) fn parse(input: &str) -> IResult<&str, (Input, Vec<Op>, Output), VerboseError<&str>> {
+    (parse_input, parse_ops, parse_out).parse(input)
 }
 
 /// 构造一个解析器，支持解析：
