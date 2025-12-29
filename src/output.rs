@@ -3,7 +3,7 @@ use crate::input::{Item, Pipe};
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) enum Output {
     Out,
-    File { file: String },
+    File { file: &'static str },
     Clip,
 }
 

@@ -25,7 +25,9 @@ use crate::parse::op::parse_ops;
 pub(crate) use nom::character::complete::i64 as parse_integer;
 use nom::error::context;
 
-pub(crate) fn parse(input: &str) -> IResult<&str, (Input, Vec<Op>, Output), VerboseError<&str>> {
+pub(crate) fn parse(
+    input: &'static str,
+) -> IResult<&'static str, (Input, Vec<Op>, Output), VerboseError<&'static str>> {
     (parse_input, parse_ops, parse_out).parse(input)
 }
 
@@ -35,7 +37,7 @@ pub(crate) fn parse(input: &str) -> IResult<&str, (Input, Vec<Op>, Output), Verb
 ///  - `cmd [ arg0 arg1 ] `：命令+一个以上的参数，中括号包围；
 pub(super) fn cmd_arg_or_args1<'a>(
     cmd: &'static str,
-) -> impl Parser<&'a str, Output = Vec<String>, Error = ParserError<'a>> {
+) -> impl Parser<&'static str, Output = Vec<&'static str>, Error = ParserError<'static>> {
     alt((
         map(cmd_arg(cmd), |arg| vec![arg]), // 单个参数
         cmd_args1(cmd),                     // 多个参数
@@ -44,7 +46,9 @@ pub(super) fn cmd_arg_or_args1<'a>(
 
 /// 构造一个解析器，支持解析：
 ///  - `cmd arg `：命令+单个参数；
-pub(super) fn cmd_arg<'a>(cmd: &'static str) -> impl Parser<&'a str, Output = String, Error = ParserError<'a>> {
+pub(super) fn cmd_arg(
+    cmd: &'static str,
+) -> impl Parser<&'static str, Output = &'static str, Error = ParserError<'static>> {
     context(
         "Cmd_Arg",
         terminated(
@@ -60,7 +64,9 @@ pub(super) fn cmd_arg<'a>(cmd: &'static str) -> impl Parser<&'a str, Output = St
 /// 构造一个解析器，支持解析：
 ///  - `cmd [ arg ] `：命令+单个参数，中括号包围；
 ///  - `cmd [ arg0 arg1 ] `：命令+一个以上的参数，中括号包围；
-pub(super) fn cmd_args1<'a>(cmd: &'static str) -> impl Parser<&'a str, Output = Vec<String>, Error = ParserError<'a>> {
+pub(super) fn cmd_args1<'a>(
+    cmd: &'static str,
+) -> impl Parser<&'static str, Output = Vec<&'static str>, Error = ParserError<'static>> {
     context(
         "Cmd_Args1",
         map(
@@ -85,20 +91,17 @@ pub(super) fn cmd_args1<'a>(cmd: &'static str) -> impl Parser<&'a str, Output = 
 }
 
 /// 解析器，支持解析单个参数。
-pub(super) fn arg(input: &str) -> IResult<&str, String, VerboseError<&str>> {
+pub(super) fn arg(input: &str) -> IResult<&str, &str, VerboseError<&str>> {
     // TODO 2025-12-24 23:29 实现完整的单个参数解析
     context(
         "Arg",
-        map(
-            verify(
-                alt((
-                    delimited(char('"'), take_until("\""), char('"')),     // 带双引号的参数
-                    delimited(char('\''), take_until("\'"), char('\'')),   // 带单引号的参数
-                    take_while1(|c: char| !c.is_whitespace() && c != '"'), // 不带引号的参数
-                )),
-                |arg: &str| arg != "[" && arg != "]", // 验证：不能是单个括号
-            ),
-            |arg: &str| arg.to_string(),
+        verify(
+            alt((
+                delimited(char('"'), take_until("\""), char('"')),     // 带双引号的参数
+                delimited(char('\''), take_until("\'"), char('\'')),   // 带单引号的参数
+                take_while1(|c: char| !c.is_whitespace() && c != '"'), // 不带引号的参数
+            )),
+            |arg: &str| arg != "[" && arg != "]", // 验证：不能是单个括号
         ),
     )
     .parse(input)
@@ -110,16 +113,10 @@ mod tests {
 
     #[test]
     fn test_cmd_arg_or_args1() {
-        assert_eq!(cmd_arg_or_args1("cmd").parse("cmd arg "), Ok(("", vec!["arg".to_string()])));
-        assert_eq!(cmd_arg_or_args1("cmd").parse("cmd [ arg ] "), Ok(("", vec!["arg".to_string()])));
-        assert_eq!(
-            cmd_arg_or_args1("cmd").parse("cmd [ arg arg1 ] "),
-            Ok(("", vec!["arg".to_string(), "arg1".to_string()]))
-        );
-        assert_eq!(
-            cmd_arg_or_args1("cmd").parse(r#"cmd [ arg "arg 1" ] "#),
-            Ok(("", vec!["arg".to_string(), "arg 1".to_string()]))
-        );
+        assert_eq!(cmd_arg_or_args1("cmd").parse("cmd arg "), Ok(("", vec!["arg"])));
+        assert_eq!(cmd_arg_or_args1("cmd").parse("cmd [ arg ] "), Ok(("", vec!["arg"])));
+        assert_eq!(cmd_arg_or_args1("cmd").parse("cmd [ arg arg1 ] "), Ok(("", vec!["arg", "arg1"])));
+        assert_eq!(cmd_arg_or_args1("cmd").parse(r#"cmd [ arg "arg 1" ] "#), Ok(("", vec!["arg", "arg 1"])));
         assert!(cmd_arg_or_args1("cmd").parse("cmd").is_err());
         assert!(cmd_arg_or_args1("cmd").parse("cmd ").is_err());
         assert!(cmd_arg_or_args1("cmd").parse("cmd [ arg ").is_err());
@@ -130,37 +127,31 @@ mod tests {
 
     #[test]
     fn test_cmd_arg() {
-        assert_eq!(cmd_arg("cmd").parse("cmd arg "), Ok(("", "arg".to_string())));
-        assert_eq!(cmd_arg("cmd").parse(r#"cmd "ar g" "#), Ok(("", "ar g".to_string())));
+        assert_eq!(cmd_arg("cmd").parse("cmd arg "), Ok(("", "arg")));
+        assert_eq!(cmd_arg("cmd").parse(r#"cmd "ar g" "#), Ok(("", "ar g")));
         assert!(cmd_arg("cmd1").parse("cmd arg ").is_err());
     }
 
     #[test]
     fn test_cmd_args1() {
-        assert_eq!(cmd_args1("cmd").parse("cmd [ arg ] "), Ok(("", vec!["arg".to_string()])));
-        assert_eq!(
-            cmd_args1("cmd").parse("cmd [ arg1 arg2 ] "),
-            Ok(("", vec!["arg1".to_string(), "arg2".to_string()]))
-        );
-        assert_eq!(
-            cmd_args1("cmd").parse(r#"cmd [ arg1 arg2 "arg 3" ] "#),
-            Ok(("", vec!["arg1".to_string(), "arg2".to_string(), "arg 3".to_string()]))
-        );
+        assert_eq!(cmd_args1("cmd").parse("cmd [ arg ] "), Ok(("", vec!["arg"])));
+        assert_eq!(cmd_args1("cmd").parse("cmd [ arg1 arg2 ] "), Ok(("", vec!["arg1", "arg2"])));
+        assert_eq!(cmd_args1("cmd").parse(r#"cmd [ arg1 arg2 "arg 3" ] "#), Ok(("", vec!["arg1", "arg2", "arg 3"])));
         assert!(cmd_args1("cmd").parse(r#"cmd [ ] "#).is_err());
         assert!(cmd_args1("cmd").parse(r#"cmd [  ] "#).is_err());
     }
 
     #[test]
     fn test_arg() {
-        assert_eq!(arg("hello"), Ok(("", "hello".to_string())));
-        assert_eq!(arg("hello "), Ok((" ", "hello".to_string())));
-        assert_eq!(arg("hello world"), Ok((" world", "hello".to_string())));
-        assert_eq!(arg(r#"hello" world"#), Ok((r#"" world"#, "hello".to_string())));
-        assert_eq!(arg(r#""hello " world"#), Ok((r#" world"#, "hello ".to_string())));
+        assert_eq!(arg("hello"), Ok(("", "hello")));
+        assert_eq!(arg("hello "), Ok((" ", "hello")));
+        assert_eq!(arg("hello world"), Ok((" world", "hello")));
+        assert_eq!(arg(r#"hello" world"#), Ok((r#"" world"#, "hello")));
+        assert_eq!(arg(r#""hello " world"#), Ok((r#" world"#, "hello ")));
         assert!(arg(r#""hello "#).is_err());
         assert!(arg("[ ").is_err());
         assert!(arg("] ").is_err());
-        assert_eq!(arg(r#""""#), Ok(("", "".to_string())));
-        assert_eq!(arg(r#"''"#), Ok(("", "".to_string())));
+        assert_eq!(arg(r#""""#), Ok(("", "")));
+        assert_eq!(arg(r#"''"#), Ok(("", "")));
     }
 }

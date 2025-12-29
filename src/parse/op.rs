@@ -5,15 +5,15 @@ use nom::bytes::complete::tag_no_case;
 use nom::character::complete::{space1, usize};
 use nom::combinator::{map, opt};
 use nom::error::context;
-use nom::multi::many1;
-use nom::sequence::{preceded, terminated};
+use nom::multi::many0;
+use nom::sequence::{delimited, preceded, terminated};
 use nom::{IResult, Parser};
 
 pub(super) type OpsResult<'a> = IResult<&'a str, Vec<Op>, ParserError<'a>>;
 pub(super) type OpResult<'a> = IResult<&'a str, Op, ParserError<'a>>;
 
-pub(super) fn parse_ops(input: &str) -> OpsResult<'_> {
-    context("Op", many1(alt((parse_upper, parse_lower, parse_replace)))).parse(input)
+pub(super) fn parse_ops(input: &'static str) -> OpsResult<'static> {
+    context("Op", many0(alt((parse_upper, parse_lower, parse_replace, parse_uniq)))).parse(input)
 }
 
 fn parse_upper(input: &str) -> OpResult<'_> {
@@ -24,7 +24,7 @@ fn parse_lower(input: &str) -> OpResult<'_> {
     context("Op::Lower", map(terminated(tag_no_case("lower"), space1), |_| Op::Lower)).parse(input)
 }
 
-fn parse_replace(input: &str) -> OpResult<'_> {
+fn parse_replace(input: &'static str) -> OpResult<'static> {
     context(
         "Op::Replace",
         map(
@@ -41,11 +41,11 @@ fn parse_replace(input: &str) -> OpResult<'_> {
                         arg, // 被替换文本
                         opt(preceded(
                             space1,
-                            ((
+                            (
                                 arg,                                          // 替换为文本
                                 opt(preceded(space1, usize)),                 // 替换次数
                                 opt(preceded(space1, tag_no_case("nocase"))), // 忽略大小写
-                            )),
+                            ),
                         )),
                     ),
                     space1,
@@ -56,12 +56,27 @@ fn parse_replace(input: &str) -> OpResult<'_> {
                 let mut count = None;
                 let mut nocase = false;
                 if let Some((to_value, count_opt, nocase_opt)) = to_opt {
-                    to = Box::leak(to_value.into_boxed_str());
+                    to = to_value;
                     count = count_opt;
                     nocase = nocase_opt.is_some();
                 }
-                Op::Replace { from: Box::leak(from.into_boxed_str()), to, count, nocase }
+                Op::Replace { from, to, count, nocase }
             },
+        ),
+    )
+    .parse(input)
+}
+
+fn parse_uniq(input: &str) -> OpResult<'_> {
+    context(
+        "Op::Uniq",
+        map(
+            delimited(
+                tag_no_case("uniq"),                          // 丢弃：命令
+                opt(preceded(space1, tag_no_case("nocase"))), // 可选：空格+nocase选项
+                space1,
+            ), // 丢弃：结尾空格
+            |nocase_opt| Op::Uniq { nocase: nocase_opt.is_some() },
         ),
     )
     .parse(input)
@@ -115,5 +130,11 @@ mod tests {
             parse_replace(r#"replace abc def nocase "#),
             Ok(("", Op::Replace { from: "abc", to: "def", count: None, nocase: true }))
         );
+    }
+
+    #[test]
+    fn test_parse_uniq() {
+        assert_eq!(parse_uniq("uniq "), Ok(("", Op::Uniq { nocase: false })));
+        assert_eq!(parse_uniq("uniq nocase "), Ok(("", Op::Uniq { nocase: true })));
     }
 }

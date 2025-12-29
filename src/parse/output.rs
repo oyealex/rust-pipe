@@ -12,7 +12,7 @@ use nom::Parser;
 
 pub(super) type OutputResult<'a> = IResult<&'a str, Output, ParserError<'a>>;
 
-pub(super) fn parse_out(input: &str) -> OutputResult<'_> {
+pub(super) fn parse_out(input: &'static str) -> OutputResult<'static> {
     context(
         "Output",
         alt((
@@ -24,7 +24,7 @@ pub(super) fn parse_out(input: &str) -> OutputResult<'_> {
     .parse(input)
 }
 
-fn parse_to_file(input: &str) -> OutputResult<'_> {
+fn parse_to_file(input: &'static str) -> OutputResult<'static> {
     context(
         "Output::File",
         map(
@@ -58,8 +58,8 @@ mod tests {
 
     #[test]
     fn test_parse_to_file() {
-        assert_eq!(parse_to_file("to file out.txt "), Ok(("", Output::File { file: "out.txt".to_string() })));
-        assert_eq!(parse_to_file(r#"to file "out .txt" "#), Ok(("", Output::File { file: "out .txt".to_string() })));
+        assert_eq!(parse_to_file("to file out.txt "), Ok(("", Output::File { file: "out.txt" })));
+        assert_eq!(parse_to_file(r#"to file "out .txt" "#), Ok(("", Output::File { file: "out .txt" })));
         assert!(parse_to_file("to").is_err());
         assert!(parse_to_file("to file ").is_err());
         assert!(parse_to_file("to file [").is_err());

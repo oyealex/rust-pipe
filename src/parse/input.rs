@@ -1,7 +1,7 @@
-use crate::input::Input;
-use crate::parse::{arg, cmd_arg_or_args1};
-use crate::parse::{parse_integer, ParserError};
 use crate::Integer;
+use crate::input::Input;
+use crate::parse::{ParserError, parse_integer};
+use crate::parse::{arg, cmd_arg_or_args1};
 use nom::branch::alt;
 use nom::bytes::complete::tag_no_case;
 use nom::character::complete::space1;
@@ -13,15 +13,27 @@ use nom::{IResult, Parser};
 
 pub(super) type InputResult<'a> = IResult<&'a str, Input, ParserError<'a>>;
 
-pub(super) fn parse_input(input: &str) -> InputResult<'_> {
-    context("Input", alt((parse_std_in, parse_file, parse_clip, parse_of, parse_gen, parse_repeat))).parse(input)
+pub(super) fn parse_input(input: &'static str) -> InputResult<'static> {
+    context(
+        "Input",
+        alt((
+            parse_std_in,
+            parse_file,
+            parse_clip,
+            parse_of,
+            parse_gen,
+            parse_repeat,
+            context("Input::StdIn", map(success(()), |_| Input::StdIn)), // 默认从标准输入获取
+        )),
+    )
+    .parse(input)
 }
 
 fn parse_std_in(input: &str) -> InputResult<'_> {
     context("Input::StdIn", map((tag_no_case("in"), space1), |_| Input::StdIn)).parse(input)
 }
 
-fn parse_file(input: &str) -> InputResult<'_> {
+fn parse_file(input: &'static str) -> InputResult<'static> {
     context("Input::File", map(cmd_arg_or_args1("file"), |files| Input::File { files })).parse(input)
 }
 
@@ -29,7 +41,7 @@ fn parse_clip(input: &str) -> InputResult<'_> {
     context("Input::Clip", map((tag_no_case("clip"), space1), |_| Input::Clip)).parse(input)
 }
 
-fn parse_of(input: &str) -> InputResult<'_> {
+fn parse_of(input: &'static str) -> InputResult<'static> {
     context("Input::Of", map(cmd_arg_or_args1("of"), |values| Input::Of { values })).parse(input)
 }
 
@@ -67,7 +79,7 @@ fn _parse_range_in_gen(input: &str) -> InputResult<'_> {
     .parse(input)
 }
 
-fn parse_repeat(input: &str) -> InputResult<'_> {
+fn parse_repeat(input: &'static str) -> InputResult<'static> {
     context(
         "Input::Repeat",
         map(
@@ -78,7 +90,7 @@ fn parse_repeat(input: &str) -> InputResult<'_> {
                 ),
                 space1, // 丢弃：结尾空格
             ),
-            |(value, count)| Input::Repeat { value: Box::leak(value.into_boxed_str()), count },
+            |(value, count)| Input::Repeat { value, count },
         ),
     )
     .parse(input)
@@ -87,8 +99,6 @@ fn parse_repeat(input: &str) -> InputResult<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nom::bytes::tag;
-    use nom_language::error::VerboseError;
 
     #[test]
     fn test_parse_std_in() {
@@ -99,13 +109,10 @@ mod tests {
 
     #[test]
     fn test_parse_file() {
-        assert_eq!(parse_file("file f.txt "), Ok(("", Input::File { files: vec!["f.txt".to_string()] })));
-        assert_eq!(parse_file(r#"file "f .txt" "#), Ok(("", Input::File { files: vec!["f .txt".to_string()] })));
-        assert_eq!(parse_file("file [ f.txt ] "), Ok(("", Input::File { files: vec!["f.txt".to_string()] })));
-        assert_eq!(
-            parse_file(r#"file [ f.txt "f .txt" ] "#),
-            Ok(("", Input::File { files: vec!["f.txt".to_string(), "f .txt".to_string()] }))
-        );
+        assert_eq!(parse_file("file f.txt "), Ok(("", Input::File { files: vec!["f.txt"] })));
+        assert_eq!(parse_file(r#"file "f .txt" "#), Ok(("", Input::File { files: vec!["f .txt"] })));
+        assert_eq!(parse_file("file [ f.txt ] "), Ok(("", Input::File { files: vec!["f.txt"] })));
+        assert_eq!(parse_file(r#"file [ f.txt "f .txt" ] "#), Ok(("", Input::File { files: vec!["f.txt", "f .txt"] })));
         assert!(parse_file("files f.txt ").is_err());
         assert!(parse_file("file [ ] ").is_err());
         assert!(parse_file("file [  ] ").is_err());
@@ -122,13 +129,10 @@ mod tests {
 
     #[test]
     fn test_parse_of() {
-        assert_eq!(parse_of("of str "), Ok(("", Input::Of { values: vec!["str".to_string()] })));
-        assert_eq!(parse_of(r#"of "s tr" "#), Ok(("", Input::Of { values: vec!["s tr".to_string()] })));
-        assert_eq!(parse_of("of [ str ] "), Ok(("", Input::Of { values: vec!["str".to_string()] })));
-        assert_eq!(
-            parse_of(r#"of [ str "s tr" ] "#),
-            Ok(("", Input::Of { values: vec!["str".to_string(), "s tr".to_string()] }))
-        );
+        assert_eq!(parse_of("of str "), Ok(("", Input::Of { values: vec!["str"] })));
+        assert_eq!(parse_of(r#"of "s tr" "#), Ok(("", Input::Of { values: vec!["s tr"] })));
+        assert_eq!(parse_of("of [ str ] "), Ok(("", Input::Of { values: vec!["str"] })));
+        assert_eq!(parse_of(r#"of [ str "s tr" ] "#), Ok(("", Input::Of { values: vec!["str", "s tr"] })));
         assert!(parse_of("ofs str ").is_err());
         assert!(parse_of("of [ ] ").is_err());
         assert!(parse_of("of [  ] ").is_err());
@@ -151,10 +155,6 @@ mod tests {
         assert_eq!(parse_gen("gen 0,,2 "), Ok(("", Input::Gen { start: 0, end: i64::MAX, included: false, step: 2 })));
         // 0
         assert_eq!(parse_gen("gen 0 "), Ok(("", Input::Gen { start: 0, end: i64::MAX, included: false, step: 1 })));
-    }
-
-    fn parse(input: &str) -> IResult<&str, (String, Option<usize>, &str), VerboseError<&str>> {
-        preceded((tag("repeat"), space1), (arg, opt(usize), space1)).parse(input)
     }
 
     #[test]

@@ -1,12 +1,13 @@
 use crate::input::{Item, Pipe};
 use std::borrow::Cow;
-use std::ops::Deref;
+use std::collections::HashSet;
 
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) enum Op {
     Upper, // OPT 2026-12-29 01:23 使用Unicode的大小写。
     Lower, // OPT 2026-12-29 01:23 使用Unicode的大小写。
     Replace { from: &'static str, to: &'static str, count: Option<usize>, nocase: bool },
+    Uniq { nocase: bool },
 }
 
 impl Op {
@@ -54,7 +55,7 @@ impl Op {
                 if to == "" || count == Some(0) {
                     pipe
                 } else {
-                    pipe.op_map(move |mut item| match &item {
+                    pipe.op_map(move |item| match &item {
                         Item::String(string) => {
                             let cow = replace_with_count_and_nocase(string, from, to, count, nocase);
                             match cow {
@@ -79,6 +80,29 @@ impl Op {
                         }
                     })
                 }
+            }
+            Op::Uniq { nocase } => {
+                let mut seen = HashSet::new();
+                pipe.op_filter(move |item| {
+                    let key = match item {
+                        Item::String(s) => {
+                            if nocase {
+                                s.to_ascii_uppercase()
+                            } else {
+                                s.clone()
+                            }
+                        }
+                        Item::Str(s) => {
+                            if nocase {
+                                s.to_ascii_uppercase()
+                            } else {
+                                s.to_string()
+                            }
+                        }
+                        Item::Integer(i) => i.to_string(),
+                    };
+                    seen.insert(key) // 返回 true 表示保留（首次出现）
+                })
             }
         }
     }
@@ -113,7 +137,7 @@ fn replace_with_count_and_nocase<'a>(
         (text, from)
     };
 
-    let matches = actual_text.match_indices(from);
+    let matches = actual_text.match_indices(actual_from);
     for (start, end) in matches {
         if replaced_count >= max_replacements {
             break;
@@ -137,23 +161,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test() {
-        let item = Item::String("abc".to_string());
-        println!("{:p}", &item);
-        let item = match item {
-            Item::String(string) => Item::String(string),
-            Item::Str(string) => Item::Str(string),
-            Item::Integer(integer) => Item::Integer(integer),
-        };
-        println!("{:p}", &item);
-    }
-
-    #[test]
     fn test_replace_with_count_and_nocase() {
         assert_eq!(replace_with_count_and_nocase("abc ABC abc abc", "abc", "1234", None, false), "1234 ABC 1234 1234");
-        assert_eq!(replace_with_count_and_nocase("abc ABC abc abc", "abc", "1234", None, true), "1234 1234 1234 1234");
+        assert_eq!(replace_with_count_and_nocase("abc ABC abc abc", "AbC", "1234", None, true), "1234 1234 1234 1234");
         assert_eq!(replace_with_count_and_nocase("abc ABC abc abc", "abc", "1234", Some(0), false), "abc ABC abc abc");
-        assert_eq!(replace_with_count_and_nocase("abc ABC abc abc", "abc", "1234", Some(0), true), "abc ABC abc abc");
+        assert_eq!(replace_with_count_and_nocase("abc ABC abc abc", "aBc", "1234", Some(0), true), "abc ABC abc abc");
         assert_eq!(
             replace_with_count_and_nocase("abc ABC abc abc", "abc", "1234", Some(2), false),
             "1234 ABC 1234 abc"

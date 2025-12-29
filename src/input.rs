@@ -3,7 +3,6 @@ use std::fs::File;
 use std::io;
 use std::io::{BufRead, BufReader};
 use std::iter::repeat;
-use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub(crate) enum Item {
@@ -17,11 +16,11 @@ pub(crate) enum Input {
     /// 标准输入：`rp in`
     StdIn,
     /// 外部文件
-    File { files: Vec<String> },
+    File { files: Vec<&'static str> },
     /// 剪切板
     Clip,
     /// 直接字面值
-    Of { values: Vec<String> },
+    Of { values: Vec<&'static str> },
     /// 整数生成器
     Gen { start: Integer, end: Integer, included: bool, step: Integer },
     /// 重复
@@ -38,6 +37,13 @@ impl Pipe {
         match self {
             Pipe::Unbounded(iter) => Pipe::Unbounded(Box::new(iter.map(f))),
             Pipe::Bounded(iter) => Pipe::Unbounded(Box::new(iter.map(f))),
+        }
+    }
+
+    pub(crate) fn op_filter(self, f: impl FnMut(&Item) -> bool + 'static) -> Pipe {
+        match self {
+            Pipe::Unbounded(iter) => Pipe::Unbounded(Box::new(iter.filter(f))),
+            Pipe::Bounded(iter) => Pipe::Bounded(Box::new(iter.filter(f))),
         }
     }
 }
@@ -76,11 +82,11 @@ impl Input {
                     .map(|line| Item::String(line.unwrap())),
             )),
             Input::Clip => {
-                todo!()
+                todo!("Clip not implemented yet")
             }
-            Input::Of { values } => Pipe::Bounded(Box::new(values.into_iter().map(Item::String))),
+            Input::Of { values } => Pipe::Bounded(Box::new(values.into_iter().map(Item::Str))),
             Input::Gen { start, end, included, step } => {
-                // TODO 2025-12-28 21:59 如果
+                // TODO 2025-12-28 21:59 如果没有指定end，设定为Unbounded。
                 Pipe::Bounded(Box::new(range_to_iter(start, end, included, step).map(|x| Item::Integer(x))))
             }
             Input::Repeat { value, count } => {
