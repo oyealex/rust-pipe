@@ -6,7 +6,7 @@ use std::collections::HashSet;
 pub(crate) enum Op {
     Upper, // OPT 2026-12-29 01:23 使用Unicode的大小写。
     Lower, // OPT 2026-12-29 01:23 使用Unicode的大小写。
-    Replace { from: &'static str, to: &'static str, count: Option<usize>, nocase: bool },
+    Replace { from: String, to: Option<String>, count: Option<usize>, nocase: bool },
     Uniq { nocase: bool },
 }
 
@@ -23,13 +23,6 @@ impl Op {
                         item
                     }
                 }
-                Item::Str(string) => {
-                    if string.chars().all(|c| c.is_ascii_uppercase()) {
-                        item
-                    } else {
-                        Item::String(string.to_ascii_uppercase())
-                    }
-                }
                 Item::Integer(_) => item,
             }),
             Op::Lower => pipe.op_map(|mut item| match &mut item {
@@ -42,29 +35,16 @@ impl Op {
                         item
                     }
                 }
-                Item::Str(string) => {
-                    if string.chars().all(|c| c.is_ascii_lowercase()) {
-                        item
-                    } else {
-                        Item::String(string.to_ascii_lowercase())
-                    }
-                }
                 Item::Integer(_) => item,
             }),
             Op::Replace { from, to, count, nocase } => {
-                if to == "" || count == Some(0) {
+                if count == Some(0) {
                     pipe
                 } else {
+                    let to = to.unwrap_or_default();
                     pipe.op_map(move |item| match &item {
                         Item::String(string) => {
-                            let cow = replace_with_count_and_nocase(string, from, to, count, nocase);
-                            match cow {
-                                Cow::Borrowed(_) => item,
-                                Cow::Owned(string) => Item::String(string),
-                            }
-                        }
-                        Item::Str(string) => {
-                            let cow = replace_with_count_and_nocase(string, from, to, count, nocase);
+                            let cow = replace_with_count_and_nocase(string, &*from, &*to, count, nocase);
                             match cow {
                                 Cow::Borrowed(_) => item,
                                 Cow::Owned(string) => Item::String(string),
@@ -72,7 +52,7 @@ impl Op {
                         }
                         Item::Integer(integer) => {
                             let integer_str = integer.to_string();
-                            let cow = replace_with_count_and_nocase(&integer_str, from, to, count, nocase);
+                            let cow = replace_with_count_and_nocase(&integer_str, &*from, &*to, count, nocase);
                             match cow {
                                 Cow::Borrowed(_) => item,
                                 Cow::Owned(string) => Item::String(string),
@@ -90,13 +70,6 @@ impl Op {
                                 s.to_ascii_uppercase()
                             } else {
                                 s.clone()
-                            }
-                        }
-                        Item::Str(s) => {
-                            if nocase {
-                                s.to_ascii_uppercase()
-                            } else {
-                                s.to_string()
                             }
                         }
                         Item::Integer(i) => i.to_string(),

@@ -3,7 +3,7 @@ use crate::input::{Item, Pipe};
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) enum Output {
     Out,
-    File { file: &'static str },
+    File { file: String },
     Clip,
 }
 
@@ -14,7 +14,6 @@ impl Output {
                 for item in pipe {
                     match item {
                         Item::String(string) => println!("{}", string),
-                        Item::Str(string) => println!("{}", string),
                         Item::Integer(integer) => println!("{}", integer),
                     }
                 }

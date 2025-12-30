@@ -58,8 +58,8 @@ mod tests {
 
     #[test]
     fn test_parse_to_file() {
-        assert_eq!(parse_to_file("to file out.txt "), Ok(("", Output::File { file: "out.txt" })));
-        assert_eq!(parse_to_file(r#"to file "out .txt" "#), Ok(("", Output::File { file: "out .txt" })));
+        assert_eq!(parse_to_file("to file out.txt "), Ok(("", Output::File { file: "out.txt".to_string() })));
+        assert_eq!(parse_to_file(r#"to file "out .txt" "#), Ok(("", Output::File { file: "out .txt".to_string() })));
         assert!(parse_to_file("to").is_err());
         assert!(parse_to_file("to file ").is_err());
         assert!(parse_to_file("to file [").is_err());

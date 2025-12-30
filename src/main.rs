@@ -9,7 +9,7 @@ mod parse;
 pub(crate) type Integer = i64;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let input = r#"uniq nocase "#;
+    let input = r#"replace 123 "#;
     let (remaining, (input, ops, output)) = parse::parse(input)?;
     println!("remaining: {:?}", remaining);
     println!("input: {:?}", input);

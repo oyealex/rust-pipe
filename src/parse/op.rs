@@ -52,11 +52,13 @@ fn parse_replace(input: &'static str) -> OpResult<'static> {
                 ),
             ), // 丢弃：结尾空格
             |(from, to_opt)| {
-                let mut to = "";
+                let mut to = None;
                 let mut count = None;
                 let mut nocase = false;
                 if let Some((to_value, count_opt, nocase_opt)) = to_opt {
-                    to = to_value;
+                    if !to_value.is_empty() {
+                        to = Some(to_value)
+                    }
                     count = count_opt;
                     nocase = nocase_opt.is_some();
                 }
@@ -100,35 +102,41 @@ mod tests {
     fn test_parse_replace() {
         assert_eq!(
             parse_replace("replace abc "),
-            Ok(("", Op::Replace { from: "abc", to: "", count: None, nocase: false }))
+            Ok(("", Op::Replace { from: "abc".to_string(), to: None, count: None, nocase: false }))
         );
         assert_eq!(
             parse_replace("replace abc 123 "),
-            Ok(("", Op::Replace { from: "abc", to: "123", count: None, nocase: false }))
+            Ok(("", Op::Replace { from: "abc".to_string(), to: Some("123".to_string()), count: None, nocase: false }))
         );
         assert_eq!(
             parse_replace("replace abc 123 5 "),
-            Ok(("", Op::Replace { from: "abc", to: "123", count: Some(5), nocase: false }))
+            Ok((
+                "",
+                Op::Replace { from: "abc".to_string(), to: Some("123".to_string()), count: Some(5), nocase: false }
+            ))
         );
         assert_eq!(
             parse_replace("replace abc 123 5 nocase "),
-            Ok(("", Op::Replace { from: "abc", to: "123", count: Some(5), nocase: true }))
+            Ok((
+                "",
+                Op::Replace { from: "abc".to_string(), to: Some("123".to_string()), count: Some(5), nocase: true }
+            ))
         );
         assert_eq!(
             parse_replace(r#"replace abc "" 5 nocase "#),
-            Ok(("", Op::Replace { from: "abc", to: "", count: Some(5), nocase: true }))
+            Ok(("", Op::Replace { from: "abc".to_string(), to: None, count: Some(5), nocase: true }))
         );
         assert_eq!(
             parse_replace(r#"replace abc "" nocase "#),
-            Ok(("", Op::Replace { from: "abc", to: "", count: None, nocase: true }))
+            Ok(("", Op::Replace { from: "abc".to_string(), to: None, count: None, nocase: true }))
         );
         assert_eq!(
             parse_replace(r#"replace abc '' nocase "#),
-            Ok(("", Op::Replace { from: "abc", to: "", count: None, nocase: true }))
+            Ok(("", Op::Replace { from: "abc".to_string(), to: None, count: None, nocase: true }))
         );
         assert_eq!(
             parse_replace(r#"replace abc def nocase "#),
-            Ok(("", Op::Replace { from: "abc", to: "def", count: None, nocase: true }))
+            Ok(("", Op::Replace { from: "abc".to_string(), to: Some("def".to_string()), count: None, nocase: true }))
         );
     }
 

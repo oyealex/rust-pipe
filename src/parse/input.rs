@@ -1,7 +1,7 @@
-use crate::Integer;
 use crate::input::Input;
-use crate::parse::{ParserError, parse_integer};
-use crate::parse::{arg, cmd_arg_or_args1};
+use crate::parse::cmd_arg_or_args1;
+use crate::parse::{arg, parse_integer, ParserError};
+use crate::Integer;
 use nom::branch::alt;
 use nom::bytes::complete::tag_no_case;
 use nom::character::complete::space1;
@@ -109,10 +109,13 @@ mod tests {
 
     #[test]
     fn test_parse_file() {
-        assert_eq!(parse_file("file f.txt "), Ok(("", Input::File { files: vec!["f.txt"] })));
-        assert_eq!(parse_file(r#"file "f .txt" "#), Ok(("", Input::File { files: vec!["f .txt"] })));
-        assert_eq!(parse_file("file [ f.txt ] "), Ok(("", Input::File { files: vec!["f.txt"] })));
-        assert_eq!(parse_file(r#"file [ f.txt "f .txt" ] "#), Ok(("", Input::File { files: vec!["f.txt", "f .txt"] })));
+        assert_eq!(parse_file("file f.txt "), Ok(("", Input::File { files: vec!["f.txt".to_string()] })));
+        assert_eq!(parse_file(r#"file "f .txt" "#), Ok(("", Input::File { files: vec!["f .txt".to_string()] })));
+        assert_eq!(parse_file("file [ f.txt ] "), Ok(("", Input::File { files: vec!["f.txt".to_string()] })));
+        assert_eq!(
+            parse_file(r#"file [ f.txt "f .txt" ] "#),
+            Ok(("", Input::File { files: vec!["f.txt".to_string(), "f .txt".to_string()] }))
+        );
         assert!(parse_file("files f.txt ").is_err());
         assert!(parse_file("file [ ] ").is_err());
         assert!(parse_file("file [  ] ").is_err());
@@ -129,10 +132,17 @@ mod tests {
 
     #[test]
     fn test_parse_of() {
-        assert_eq!(parse_of("of str "), Ok(("", Input::Of { values: vec!["str"] })));
-        assert_eq!(parse_of(r#"of "s tr" "#), Ok(("", Input::Of { values: vec!["s tr"] })));
-        assert_eq!(parse_of("of [ str ] "), Ok(("", Input::Of { values: vec!["str"] })));
-        assert_eq!(parse_of(r#"of [ str "s tr" ] "#), Ok(("", Input::Of { values: vec!["str", "s tr"] })));
+        assert_eq!(parse_of("of str "), Ok(("", Input::Of { values: vec!["str".to_string()] })));
+        assert_eq!(parse_of(r#"of "s tr" "#), Ok(("", Input::Of { values: vec!["s tr".to_string()] })));
+        assert_eq!(parse_of("of [ str ] "), Ok(("", Input::Of { values: vec!["str".to_string()] })));
+        assert_eq!(
+            parse_of(r#"of [ str "s tr" ] "#),
+            Ok(("", Input::Of { values: vec!["str".to_string(), "s tr".to_string()] }))
+        );
+        assert_eq!(
+            parse_of("of [ \\[ \\[ \\] ] "),
+            Ok(("", Input::Of { values: vec!["[".to_string(), "[".to_string(), "]".to_string()] }))
+        );
         assert!(parse_of("ofs str ").is_err());
         assert!(parse_of("of [ ] ").is_err());
         assert!(parse_of("of [  ] ").is_err());
@@ -159,7 +169,10 @@ mod tests {
 
     #[test]
     fn test_parse_repeat() {
-        assert_eq!(parse_repeat("repeat abc "), Ok(("", Input::Repeat { value: "abc", count: None })));
-        assert_eq!(parse_repeat("repeat abc 10 "), Ok(("", Input::Repeat { value: "abc", count: Some(10) })));
+        assert_eq!(parse_repeat("repeat abc "), Ok(("", Input::Repeat { value: "abc".to_string(), count: None })));
+        assert_eq!(
+            parse_repeat("repeat abc 10 "),
+            Ok(("", Input::Repeat { value: "abc".to_string(), count: Some(10) }))
+        );
     }
 }

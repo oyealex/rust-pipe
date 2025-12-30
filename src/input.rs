@@ -7,7 +7,6 @@ use std::iter::repeat;
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub(crate) enum Item {
     String(String),
-    Str(&'static str),
     Integer(Integer),
 }
 
@@ -16,15 +15,15 @@ pub(crate) enum Input {
     /// 标准输入：`rp in`
     StdIn,
     /// 外部文件
-    File { files: Vec<&'static str> },
+    File { files: Vec<String> },
     /// 剪切板
     Clip,
     /// 直接字面值
-    Of { values: Vec<&'static str> },
+    Of { values: Vec<String> },
     /// 整数生成器
     Gen { start: Integer, end: Integer, included: bool, step: Integer },
     /// 重复
-    Repeat { value: &'static str, count: Option<usize> },
+    Repeat { value: String, count: Option<usize> },
 }
 
 pub(crate) enum Pipe {
@@ -84,16 +83,16 @@ impl Input {
             Input::Clip => {
                 todo!("Clip not implemented yet")
             }
-            Input::Of { values } => Pipe::Bounded(Box::new(values.into_iter().map(Item::Str))),
+            Input::Of { values } => Pipe::Bounded(Box::new(values.into_iter().map(Item::String))),
             Input::Gen { start, end, included, step } => {
                 // TODO 2025-12-28 21:59 如果没有指定end，设定为Unbounded。
                 Pipe::Bounded(Box::new(range_to_iter(start, end, included, step).map(|x| Item::Integer(x))))
             }
             Input::Repeat { value, count } => {
                 if count.is_none() {
-                    Pipe::Unbounded(Box::new(repeat(Item::Str(value))))
+                    Pipe::Unbounded(Box::new(repeat(Item::String(value))))
                 } else {
-                    Pipe::Bounded(Box::new(repeat(Item::Str(value)).take(count.unwrap())))
+                    Pipe::Bounded(Box::new(repeat(Item::String(value)).take(count.unwrap())))
                 }
             }
         }
