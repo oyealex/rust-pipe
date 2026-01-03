@@ -21,15 +21,14 @@ pub(crate) enum Op {
     SwitchCase,
     /// 替换字串：
     /// ```
-    /// replace <from>[ <to>[ <count>][ nocase]]
+    /// replace <from> <to>[ <count>][ nocase]
     ///
-    /// replace abc
     /// replace abc xyz
     /// replace abc xyz 10
     /// replace abc xyz nocase
     /// replace abc xyz 10 nocase
     /// ```
-    Replace { from: String, to: Option<String>, count: Option<usize>, nocase: bool },
+    Replace { from: String, to: String, count: Option<usize>, nocase: bool },
     /// 去重：
     /// ```
     /// uniq[ nocase]
@@ -38,6 +37,14 @@ pub(crate) enum Op {
     /// uniq nocase
     /// ```
     Uniq { nocase: bool },
+    /// 调试：
+    /// ```
+    /// peek[ <file_name>]
+    ///
+    /// peek
+    /// peek file1.txt
+    /// ```
+    Peek { file: Option<String> },
 }
 
 impl Op {
@@ -47,9 +54,13 @@ impl Op {
     pub(crate) fn new_lower() -> Op {
         Op::Lower
     }
-    pub(crate) fn new_replace(from: String, to: Option<String>, count: Option<usize>, nocase: bool) -> Op {
+    pub(crate) fn new_replace(from: String, to: String, count: Option<usize>, nocase: bool) -> Op {
         Op::Replace { from, to, count, nocase }
     }
+    pub(crate) fn new_peek(file: Option<String>) -> Op {
+        Op::Peek { file }
+    }
+
     pub(crate) fn new_uniq(nocase: bool) -> Op {
         Op::Uniq { nocase }
     }
@@ -84,7 +95,6 @@ impl Op {
                 if count == Some(0) {
                     pipe
                 } else {
-                    let to = to.unwrap_or_default();
                     pipe.op_map(move |item| match &item {
                         Item::String(string) => {
                             let cow = replace_with_count_and_nocase(string, &*from, &*to, count, nocase);
@@ -120,6 +130,9 @@ impl Op {
                     seen.insert(key) // 返回 true 表示保留（首次出现）
                 })
             }
+            Op::Peek{file} => {
+                todo!()
+            }
         }
     }
 }
@@ -127,7 +140,7 @@ impl Op {
 /// 替换字符串
 ///
 /// # Arguments
-/// * `text` - 原始字符串
+/// * `token` - 原始字符串
 /// * `from` - 要被替换的子串
 /// * `to` - 替换后的字符串
 /// * `count` - 替换次数
