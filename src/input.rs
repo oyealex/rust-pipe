@@ -1,7 +1,7 @@
-use std::borrow::Cow;
 use crate::err::RpErr;
 use crate::{Float, Integer, RpRes};
 use cmd_help::CmdHelp;
+use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io;
@@ -321,7 +321,7 @@ mod iter_tests {
     use super::*;
 
     #[test]
-    fn test_positive() {
+    fn test_range_to_iter_positive() {
         assert_eq!(range_to_iter(0, 10, false, 1).collect::<Vec<_>>(), (0..10).collect::<Vec<_>>());
         assert_eq!(range_to_iter(0, 10, true, 1).collect::<Vec<_>>(), (0..=10).collect::<Vec<_>>());
         assert_eq!(range_to_iter(0, 10, false, 2).collect::<Vec<_>>(), (0..10).step_by(2).collect::<Vec<_>>());
@@ -329,7 +329,7 @@ mod iter_tests {
     }
 
     #[test]
-    fn test_negative() {
+    fn test_range_to_iter_negative() {
         assert_eq!(range_to_iter(0, 10, false, -1).collect::<Vec<_>>(), (0..10).rev().collect::<Vec<_>>());
         assert_eq!(range_to_iter(0, 10, true, -1).collect::<Vec<_>>(), (0..=10).rev().collect::<Vec<_>>());
         assert_eq!(range_to_iter(0, 10, false, -2).collect::<Vec<_>>(), (0..10).rev().step_by(2).collect::<Vec<_>>());
@@ -337,7 +337,7 @@ mod iter_tests {
     }
 
     #[test]
-    fn test_empty() {
+    fn test_range_to_iter_empty() {
         assert_eq!(range_to_iter(0, 0, false, 1).collect::<Vec<_>>(), (0..0).collect::<Vec<_>>());
         assert_eq!(range_to_iter(0, 0, true, 1).collect::<Vec<_>>(), (0..=0).collect::<Vec<_>>());
         assert_eq!(range_to_iter(0, 0, false, 2).collect::<Vec<_>>(), (0..0).step_by(2).collect::<Vec<_>>());
@@ -345,7 +345,7 @@ mod iter_tests {
     }
 
     #[test]
-    fn test_reverted_range_and_positive() {
+    fn test_range_to_iter_reverted_range_and_positive() {
         assert_eq!(range_to_iter(10, 0, false, 1).collect::<Vec<_>>(), (10..0).collect::<Vec<_>>());
         assert_eq!(range_to_iter(10, 0, true, 1).collect::<Vec<_>>(), (10..=0).collect::<Vec<_>>());
         assert_eq!(range_to_iter(10, 0, false, 2).collect::<Vec<_>>(), (10..0).step_by(2).collect::<Vec<_>>());
@@ -353,7 +353,7 @@ mod iter_tests {
     }
 
     #[test]
-    fn test_reverted_range_and_negative() {
+    fn test_range_to_iter_reverted_range_and_negative() {
         assert_eq!(range_to_iter(10, 0, false, -1).collect::<Vec<_>>(), (10..0).rev().collect::<Vec<_>>());
         assert_eq!(range_to_iter(10, 0, true, -1).collect::<Vec<_>>(), (10..=0).rev().collect::<Vec<_>>());
         assert_eq!(range_to_iter(10, 0, false, -2).collect::<Vec<_>>(), (10..0).rev().step_by(2).collect::<Vec<_>>());
@@ -361,7 +361,7 @@ mod iter_tests {
     }
 
     #[test]
-    fn test_zero_step() {
+    fn test_range_to_iter_zero_step() {
         assert_eq!(range_to_iter(0, 0, false, 0).next().is_none(), true);
         assert_eq!(range_to_iter(0, 1, false, 0).take(10).collect::<Vec<_>>(), vec![0; 10]);
         assert_eq!(range_to_iter(0, 1, false, 0).take(100).collect::<Vec<_>>(), vec![0; 100]);

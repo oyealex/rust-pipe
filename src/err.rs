@@ -1,6 +1,6 @@
+use cmd_help::CmdHelp;
 use std::process::{ExitCode, Termination};
 use thiserror::Error;
-use cmd_help::CmdHelp;
 
 #[derive(Error, Debug, Eq, PartialEq, CmdHelp)]
 pub(crate) enum RpErr {

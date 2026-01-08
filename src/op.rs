@@ -124,7 +124,7 @@ impl Op {
                                         item: item.to_string(),
                                         err: err.to_string(),
                                     }
-                                        .termination()
+                                    .termination()
                                 }
                             }))
                         }
@@ -225,8 +225,7 @@ impl Op {
                         };
                         Ok(Pipe::Bounded(Box::new(new_pipe)))
                     } else if let Some(def) = def_float {
-                        let key_fn =
-                            move |item: &Item| OrderedFloat(Float::try_from(item).unwrap_or(def));
+                        let key_fn = move |item: &Item| OrderedFloat(Float::try_from(item).unwrap_or(def));
                         let new_pipe = if desc {
                             pipe.sorted_by_key(|item| Reverse(key_fn(item)))
                         } else {
@@ -254,7 +253,7 @@ impl Op {
                     };
                     Ok(Pipe::Bounded(Box::new(iter)))
                 }
-            }
+            },
         }
     }
 }
