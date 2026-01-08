@@ -1,9 +1,10 @@
-use crate::op::{Op, PeekTo};
+use crate::op::{Op, PeekTo, SortBy};
 use crate::parse::token::{arg, general_file_info, ParserError};
+use crate::{Float, Integer};
 use nom::branch::alt;
 use nom::bytes::complete::tag_no_case;
 use nom::character::complete::{space1, usize};
-use nom::combinator::{map, opt};
+use nom::combinator::{map, opt, verify};
 use nom::error::context;
 use nom::multi::many0;
 use nom::sequence::{delimited, preceded, terminated};
@@ -13,8 +14,29 @@ pub(in crate::parse) type OpsResult<'a> = IResult<&'a str, Vec<Op>, ParserError<
 pub(in crate::parse) type OpResult<'a> = IResult<&'a str, Op, ParserError<'a>>;
 
 pub(in crate::parse) fn parse_ops(input: &str) -> OpsResult<'_> {
-    context("Op", many0(alt((parse_upper, parse_lower, parse_case, parse_replace, parse_uniq, parse_peek))))
+    context("Op", many0(alt((parse_peek, parse_upper, parse_lower, parse_case, parse_replace, parse_uniq, parse_sort))))
         .parse(input)
+}
+
+fn parse_peek(input: &str) -> OpResult<'_> {
+    context(
+        "Op::Peek",
+        map(
+            preceded(
+                (tag_no_case(":peek"), space1), // 丢弃命令和空格
+                opt(general_file_info(true)),   // 可选文件信息
+            ),
+            |file_info| match file_info {
+                Some((file, append_opt, ending_opt)) => Op::new_peek(PeekTo::File {
+                    file,
+                    append: append_opt.is_some(),
+                    crlf: ending_opt.map(|s| s.eq_ignore_ascii_case("crlf")),
+                }),
+                None => Op::new_peek(PeekTo::StdOut),
+            },
+        ),
+    )
+    .parse(input)
 }
 
 fn parse_upper(input: &str) -> OpResult<'_> {
@@ -76,22 +98,58 @@ fn parse_uniq(input: &str) -> OpResult<'_> {
     .parse(input)
 }
 
-fn parse_peek(input: &str) -> OpResult<'_> {
+fn parse_sort(input: &str) -> OpResult<'_> {
     context(
-        "Op::Peek",
+        "Op::Sort",
         map(
-            preceded(
-                (tag_no_case(":peek"), space1), // 丢弃命令和空格
-                opt(general_file_info(true)),   // 可选文件信息
+            terminated(
+                preceded(
+                    tag_no_case(":sort"), // 丢弃：命令
+                    alt((
+                        preceded(
+                            // case 1：按数值排序
+                            (space1, tag_no_case("num")), // 固定tag
+                            alt((
+                                map(
+                                    preceded(
+                                        space1,
+                                        (
+                                            verify(arg, |s: &String| s.parse::<Integer>().is_ok()), // 默认整数值
+                                            opt((space1, tag_no_case("desc"))),                     // 可选逆序
+                                        ),
+                                    ),
+                                    |(num, desc): (String, Option<_>)| {
+                                        (SortBy::Num(num.parse::<Integer>().ok(), None), desc.is_some())
+                                    },
+                                ),
+                                map(
+                                    preceded(
+                                        space1,
+                                        (
+                                            verify(arg, |s: &String| s.parse::<Float>().is_ok()), // 默认浮点值
+                                            opt((space1, tag_no_case("desc"))),                   // 可选逆序
+                                        ),
+                                    ),
+                                    |(num, desc): (String, Option<_>)| {
+                                        (SortBy::Num(None, num.parse::<Float>().ok()), desc.is_some())
+                                    },
+                                ),
+                                map(opt((space1, tag_no_case("desc"))), |desc| {
+                                    (SortBy::Num(None, None), desc.is_some())
+                                }), // 无任何默认值
+                            )),
+                        ),
+                        map((space1, tag_no_case("random")), |_| (SortBy::Random, false)), // case 2：随机排序
+                        map(
+                            // case 3：按字典序排序（默认）
+                            (opt((space1, tag_no_case("nocase"))), opt((space1, tag_no_case("desc")))),
+                            |(nc, desc): (Option<_>, Option<_>)| (SortBy::Text(nc.is_some()), desc.is_some()),
+                        ),
+                    )),
+                ),
+                space1, // 结尾空格
             ),
-            |file_info| match file_info {
-                Some((file, append_opt, ending_opt)) => Op::new_peek(PeekTo::File {
-                    file,
-                    append: append_opt.is_some(),
-                    crlf: ending_opt.map(|s| s.eq_ignore_ascii_case("crlf")),
-                }),
-                None => Op::new_peek(PeekTo::StdOut),
-            },
+            |(sort_by, desc): (SortBy, bool)| Op::new_sort(sort_by, desc),
         ),
     )
     .parse(input)
@@ -182,5 +240,26 @@ mod tests {
             parse_peek(r#":peek "out .txt" "#),
             Ok((" ", Op::new_peek(PeekTo::File { file: "out .txt".to_string(), append: false, crlf: None })))
         );
+    }
+
+    #[test]
+    fn test_parse_sort() {
+        assert_eq!(parse_sort(":sort "), Ok(("", Op::new_sort(SortBy::Text(false), false))));
+        assert_eq!(parse_sort(":sort desc "), Ok(("", Op::new_sort(SortBy::Text(false), true))));
+        assert_eq!(parse_sort(":sort nocase "), Ok(("", Op::new_sort(SortBy::Text(true), false))));
+        assert_eq!(parse_sort(":sort nocase desc "), Ok(("", Op::new_sort(SortBy::Text(true), true))));
+        assert_eq!(parse_sort(":sort num "), Ok(("", Op::new_sort(SortBy::Num(None, None), false))));
+        assert_eq!(parse_sort(":sort num desc "), Ok(("", Op::new_sort(SortBy::Num(None, None), true))));
+        assert_eq!(parse_sort(":sort num 10 "), Ok(("", Op::new_sort(SortBy::Num(Some(10), None), false))));
+        assert_eq!(parse_sort(":sort num 10 desc "), Ok(("", Op::new_sort(SortBy::Num(Some(10), None), true))));
+        assert_eq!(parse_sort(":sort num 10.5 "), Ok(("", Op::new_sort(SortBy::Num(None, Some(10.5)), false))));
+        assert_eq!(parse_sort(":sort num 10.5 desc "), Ok(("", Op::new_sort(SortBy::Num(None, Some(10.5)), true))));
+        assert_eq!(parse_sort(":sort num -10 "), Ok(("", Op::new_sort(SortBy::Num(Some(-10), None), false))));
+        assert_eq!(parse_sort(":sort num -10 desc "), Ok(("", Op::new_sort(SortBy::Num(Some(-10), None), true))));
+        assert_eq!(parse_sort(":sort num -10.5 "), Ok(("", Op::new_sort(SortBy::Num(None, Some(-10.5)), false))));
+        assert_eq!(parse_sort(":sort num -10.5 desc "), Ok(("", Op::new_sort(SortBy::Num(None, Some(-10.5)), true))));
+        assert_eq!(parse_sort(":sort random "), Ok(("", Op::new_sort(SortBy::Random, false))));
+
+        assert_eq!(parse_sort(":sort random desc "), Ok(("desc ", Op::new_sort(SortBy::Random, false))));
     }
 }

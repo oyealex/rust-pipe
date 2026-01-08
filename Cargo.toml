@@ -11,4 +11,5 @@ thiserror = "2.0.17" # 错误码
 clipboard-win = "5.4.1" # windows剪切板
 ordered-float = "5.1.0" # 浮点数排序
 unicase = "2.9.0" # 忽略大小写
+rand = "0.9.2" # 随机数
 cmd-help = { path = "./cmd_help" } # doc生成帮助

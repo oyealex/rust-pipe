@@ -5,6 +5,7 @@ use crate::{Float, Integer, RpRes};
 use cmd_help::CmdHelp;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
+use rand::seq::SliceRandom;
 use std::borrow::Cow;
 use std::cmp::Reverse;
 use std::collections::HashSet;
@@ -22,6 +23,7 @@ pub(crate) enum PeekTo {
 pub(crate) enum SortBy {
     Num(Option<Integer>, Option<Float>),
     Text(bool /*nocase*/),
+    Random,
 }
 
 #[derive(Debug, PartialEq, CmdHelp)]
@@ -71,25 +73,33 @@ pub(crate) enum Op {
     // /* **************************************** 增加 **************************************** */
     /* **************************************** 调整位置 **************************************** */
     /// :sort       排序。
-    ///             :sort[ num [<default>]][ nocase][ desc]
+    ///             :sort[ num [<default>]][ nocase][ desc][ random]
     ///                 num         按照数值排序，可选，未指定时按照字典序排序。
     ///                             尝试将文本解析为数值后排序，无法解析的按照<default>排序。
     ///                 <default>   仅按照数值排序时生效，无法解析为数值的文本的默认数值，可选，
     ///                             未指定时按照数值最大值处理。
     ///                 nocase      忽略大小写，仅按字典序排序时生效，可选，未指定时不忽略大小写。
     ///                 desc        逆序排序，可选，未指定时正序排序。
+    ///                 random      随机排序，与按照数值排序和字典序排序互斥，且不支持逆序。
     ///             例如：
     ///                 :sort
     ///                 :sort desc
     ///                 :sort nocase
     ///                 :sort nocase desc
     ///                 :sort num
+    ///                 :sort num desc
     ///                 :sort num 10
     ///                 :sort num 10 desc
+    ///                 :sort num 10.5
+    ///                 :sort num 10.5 desc
+    ///                 :sort random
     Sort { sort_by: SortBy, desc: bool },
 }
 
 impl Op {
+    pub(crate) fn new_peek(peek_to: PeekTo) -> Op {
+        Op::Peek(peek_to)
+    }
     pub(crate) fn new_upper() -> Op {
         Op::Upper
     }
@@ -102,11 +112,11 @@ impl Op {
     pub(crate) fn new_replace(from: String, to: String, count: Option<usize>, nocase: bool) -> Op {
         Op::Replace { from, to, count, nocase }
     }
-    pub(crate) fn new_peek(peek_to: PeekTo) -> Op {
-        Op::Peek(peek_to)
-    }
     pub(crate) fn new_uniq(nocase: bool) -> Op {
         Op::Uniq { nocase }
+    }
+    pub(crate) fn new_sort(sort_by: SortBy, desc: bool) -> Op {
+        Op::Sort { sort_by, desc }
     }
 
     pub(crate) fn wrap(self, pipe: Pipe, configs: &'static [Config]) -> RpRes {
@@ -223,18 +233,16 @@ impl Op {
                         } else {
                             pipe.sorted_by_key(key_fn)
                         };
-                        Ok(Pipe::Bounded(Box::new(new_pipe)))
-                    } else if let Some(def) = def_float {
-                        let key_fn = move |item: &Item| OrderedFloat(Float::try_from(item).unwrap_or(def));
-                        let new_pipe = if desc {
-                            pipe.sorted_by_key(|item| Reverse(key_fn(item)))
-                        } else {
-                            pipe.sorted_by_key(key_fn)
-                        };
-                        Ok(Pipe::Bounded(Box::new(new_pipe)))
-                    } else {
-                        unreachable!("default integer or default float must be set")
+                        return Ok(Pipe::Bounded(Box::new(new_pipe)));
                     }
+                    let def = def_float.unwrap_or(Float::MAX); // 默认按照浮点最大值
+                    let key_fn = move |item: &Item| OrderedFloat(Float::try_from(item).unwrap_or(def));
+                    let new_pipe = if desc {
+                        pipe.sorted_by_key(|item| Reverse(key_fn(item)))
+                    } else {
+                        pipe.sorted_by_key(key_fn)
+                    };
+                    Ok(Pipe::Bounded(Box::new(new_pipe)))
                 }
                 SortBy::Text(nocase) => {
                     // TODO 2026-01-08 02:34 使用UniCase优化其他nocase场景
@@ -252,6 +260,11 @@ impl Op {
                         }
                     };
                     Ok(Pipe::Bounded(Box::new(iter)))
+                }
+                SortBy::Random => {
+                    let mut v = pipe.collect::<Vec<_>>();
+                    v.shuffle(&mut rand::rng());
+                    Ok(Pipe::Bounded(Box::new(v.into_iter())))
                 }
             },
         }
