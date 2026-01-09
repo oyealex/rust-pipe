@@ -9,6 +9,7 @@ mod input;
 mod op;
 mod output;
 mod parse;
+mod sink;
 
 pub(crate) type Integer = i64;
 pub(crate) type Float = f64;

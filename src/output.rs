@@ -8,13 +8,13 @@ use std::io::Write;
 #[derive(Debug, Eq, PartialEq, CmdHelp)]
 pub(crate) enum Output {
     /// :to out     输出到标准输出。
-    ///             不指定元素输出时的默认输出。
+    ///             未指定元素输出时的默认输出。
     StdOut,
     /// :to file    输出到文件。
     ///             :to file <file_name>[ append][ lf|crlf]
     ///                 <file_name> 文件路径，必选。
-    ///                 append      追加输出而不是覆盖，可选，如果不指定则覆盖源文件。
-    ///                 lf|crlf     指定换行符为'LF'或'CRLF'，可选，如果不指定则默认使用'LF'。
+    ///                 append      追加输出而不是覆盖，可选，如果未指定则覆盖源文件。
+    ///                 lf|crlf     指定换行符为'LF'或'CRLF'，可选，如果未指定则默认使用'LF'。
     ///             例如：
     ///                 :to file out.txt
     ///                 :to file out.txt append
@@ -25,7 +25,7 @@ pub(crate) enum Output {
     File { file: String, append: bool, crlf: Option<bool> },
     /// :to clip    输出到剪切板。
     ///             :to clip[ lf|crlf]
-    ///                 lf|crlf 指定换行符为'LF'或'CRLF'，可选，如果不指定则默认使用'LF'。
+    ///                 lf|crlf 指定换行符为'LF'或'CRLF'，可选，如果未指定则默认使用'LF'。
     ///             例如：
     ///                 :to clip
     ///                 :to clip lf

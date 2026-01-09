@@ -164,6 +164,14 @@ fn normal_escape(c: char) -> Option<&'static str> {
     }
 }
 
+pub(in crate::parse) fn escape_string(input: &str) -> Option<String> {
+    if let Ok((_, result)) = escaped_trans(none_of("\\"), '\\', normal_escape).parse(input) {
+        Some(result)
+    } else {
+        None
+    }
+}
+
 /// `nom::bytes::complete::escaped_transform`的优化版本，escaped_transform处理不在转义范围内的反斜杠字符时如果需要
 /// 保留原本的字符内容，第三个参数需要返回String类型，导致许多零碎的String碎片，此优化版本一次性解析后手动替换转义
 /// 字符，原样保留非转义内容，并且一次性申请String对象。
@@ -243,5 +251,12 @@ mod tests {
             cmd_arg1(":cmd").parse(":cmd ::arg1 :::arg2 ::::arg3 :cmd4"),
             Ok((":cmd4", vec![":arg1".to_string(), "::arg2".to_string(), ":::arg3".to_string()]))
         );
+    }
+
+    #[test]
+    fn test_escape_string() {
+        assert_eq!(escape_string("''"), Some("''".to_string()));
+        assert_eq!(escape_string("abc"), Some("abc".to_string()));
+        assert_eq!(escape_string("\\n abc"), Some("\n abc".to_string()));
     }
 }

@@ -48,8 +48,8 @@ pub(crate) enum Op {
     ///             :replace <from> <to>[ <count>][ nocase]
     ///                 <from>  待替换的字符串，必选。
     ///                 <to>    待替换为的字符串，必选。
-    ///                 <count> 对每个元素需要替换的次数，不能为负数，可选，不指定则替换所有。
-    ///                 nocase  替换时忽略大小写，可选，不指定时不忽略大小写。
+    ///                 <count> 对每个元素需要替换的次数，不能为负数，可选，未指定则替换所有。
+    ///                 nocase  替换时忽略大小写，可选，未指定时不忽略大小写。
     ///             例如：
     ///                 :replace abc xyz
     ///                 :replace abc xyz 10
@@ -60,15 +60,26 @@ pub(crate) enum Op {
     /// :uniq       去重。
     ///             数值类型元素当作字符串处理，但是去重后仍为原数值类型。
     ///             :uniq[ nocase]
-    ///                 nocase  去重时忽略大小写，可选，不指定时不忽略大小写。
+    ///                 nocase  去重时忽略大小写，可选，未指定时不忽略大小写。
     ///             例如：
     ///                 :uniq
     ///                 :uniq nocase
     Uniq { nocase: bool },
     /// :join       合并数据。
-    ///             数值类型元素当作字符串处理。
-    ///             :join
-    Join { delimiter: String, leading: String, ending: String, count: Option<usize> },
+    ///             数值类型元素当作字符串处理，支持按照数量分组合并。
+    ///             :join<[ <delimiter>[ <leading>[ <ending>]]]|[ <delimiter> <leading> <ending> <size>]>
+    ///             <delimiter> 分隔字符串，可选。
+    ///             <leading>   前缀字符串，可选。
+    ///                         指定前缀字符串时必须指定分割字符串。
+    ///             <ending>    后缀字符串，可选。
+    ///                         指定后缀字符串时必须指定分割字符串和前缀字符串。
+    ///             <size>      分组大小，必须为正整数，可选，未指定时所有数据为一组。
+    ///                         指定分组大小时必须指定分隔字符串、前缀字符串和后缀字符串。
+    ///             例如：
+    ///                 :join ,
+    ///                 :join , [ ]
+    ///                 :join , [ ] 3
+    Join { join_info: JoinInfo, count: Option<usize> },
     // /// 丢弃：
     // /// ```
     // /// :drop
@@ -119,8 +130,8 @@ impl Op {
     pub(crate) fn new_uniq(nocase: bool) -> Op {
         Op::Uniq { nocase }
     }
-    pub(crate) fn new_join(separator: String) -> Op {
-        Op::Join { delimiter: separator, leading: String::new(), ending: String::new(), count: None }
+    pub(crate) fn new_join(join_info: JoinInfo, count: Option<usize>) -> Op {
+        Op::Join { join_info, count }
     }
     pub(crate) fn new_sort(sort_by: SortBy, desc: bool) -> Op {
         Op::Sort { sort_by, desc }
@@ -231,78 +242,21 @@ impl Op {
                     seen.insert(key) // 返回 true 表示保留（首次出现）
                 }))
             }
-            Op::Join { delimiter, leading, ending, count } => {
+            Op::Join { join_info, count } => {
                 if let Some(count) = count {
                     if count > 0 {
-                        /*impl Pipe {
-    pub fn group_and_join(
-        self,
-        count: usize,
-        delimiter: String, // 注意：改为 owned String 避免闭包捕获引用
-    ) -> Result<Pipe, Error> {
-        assert!(count > 0, "group size must be positive");
-
-        let grouped_iter = GroupJoin {
-            source: self.map(|item| item.into()), // Item → String
-            group_size: count,
-            delimiter,
-        };
-
-        Ok(Pipe::Unbounded(Box::new(grouped_iter)))
-    }
-}
-
-// 自定义分组迭代器（完全 owned，无引用）
-struct GroupJoin<I> {
-    source: I,
-    group_size: usize,
-    delimiter: String,
-}
-
-impl<I> Iterator for GroupJoin<I>
-where
-    I: Iterator<Item = String>,
-{
-    type Item = Item; // 假设你有 Item::String(String) 构造方式
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut group = Vec::with_capacity(self.group_size);
-        for _ in 0..self.group_size {
-            if let Some(item) = self.source.next() {
-                group.push(item);
-            } else {
-                break;
-            }
-        }
-        if group.is_empty() {
-            None
-        } else {
-            let joined = group.join(&self.delimiter);
-            Some(Item::String(joined)) // 或根据你的 Item 构造方式调整
-        }
-    }
-}*/
-
-                        // Item → String
-                        // let grouped_iter = pipe.map(|item| match item.to_string_lossy() {
-                        //     Cow::Borrowed(string) => string.to_owned(),
-                        //     Cow::Owned(string) => string,
-                        // })
-                        //     .chunks(count)
-                        //     .into_iter()
-                        //     .map(move |mut chunk| Item::String(chunk.join(&delimiter)));
-                        // // 分组后的迭代器无法双向遍历，只能返回 Unbounded
-                        // Ok(Pipe::Unbounded(Box::new(grouped_iter)))
-                        todo!()
+                        println!("{:?}", pipe.size_hint());
+                        return Ok(Pipe::Unbounded(Box::new(ChunkJoin { source: pipe, group_size: count, join_info })));
                     } else {
                         unreachable!("join count must be greater than zero");
                     }
-                } else {
-                    Ok(Pipe::Bounded(Box::new(std::iter::once(Item::String(format!(
-                        "{leading}{}{ending}",
-                        pipe.join(&delimiter)
-                    ))))))
                 }
+                Ok(Pipe::Bounded(Box::new(std::iter::once(Item::String(format!(
+                    "{}{}{}",
+                    join_info.leading,
+                    pipe.join(&join_info.delimiter),
+                    join_info.ending
+                ))))))
             }
             Op::Sort { sort_by, desc } => match sort_by {
                 SortBy::Num(def_integer, def_float) => {
@@ -396,6 +350,47 @@ fn replace_with_count_and_nocase<'a>(
     } else {
         result.push_str(&text[last_end..]); // 添加剩余文本
         Cow::Owned(result)
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Default)]
+pub(crate) struct JoinInfo {
+    pub(crate) delimiter: String,
+    pub(crate) leading: String,
+    pub(crate) ending: String,
+}
+
+struct ChunkJoin<I> {
+    source: I,
+    group_size: usize,
+    join_info: JoinInfo,
+}
+
+impl<I> Iterator for ChunkJoin<I>
+where
+    I: Iterator<Item = Item>,
+{
+    type Item = Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut chunk = Vec::with_capacity(self.group_size);
+        for _ in 0..self.group_size {
+            if let Some(item) = self.source.next() {
+                chunk.push(String::from(item));
+            } else {
+                break;
+            }
+        }
+        if chunk.is_empty() {
+            None
+        } else {
+            Some(Item::String(format!(
+                "{}{}{}",
+                self.join_info.leading,
+                chunk.join(&self.join_info.delimiter),
+                self.join_info.ending
+            )))
+        }
     }
 }
 

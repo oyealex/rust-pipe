@@ -42,12 +42,13 @@ fn parse_arg0(args: &mut Peekable<impl Iterator<Item = String>>) -> Vec<String> 
     res
 }
 
-/// 解析一个可选的参数
+/// 解析一个可选的参数，参数不为命令格式，处理转义
 fn parse_opt_arg(args: &mut Peekable<impl Iterator<Item = String>>) -> Option<String> {
     if let Some(value) = args.peek()
         && crate::parse::token::cmd_token(value).is_err()
     {
         let arg = args.next().unwrap();
+        let arg = crate::parse::token::escape_string(&arg).unwrap_or(arg);
         Some(if let Some(stripped) = arg.strip_prefix("::") { format!(":{}", stripped) } else { arg })
     } else {
         None

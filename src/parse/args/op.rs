@@ -1,5 +1,5 @@
 use crate::err::RpErr;
-use crate::op::{Op, PeekTo, SortBy};
+use crate::op::{JoinInfo, Op, PeekTo, SortBy};
 use crate::parse::args::{consume_if, consume_if_some, parse_general_file_info, parse_opt_arg};
 use crate::{Float, Integer};
 use std::iter::Peekable;
@@ -84,7 +84,28 @@ fn parse_uniq(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Optio
 
 fn parse_join(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Option<Op>, RpErr> {
     args.next();
-    Ok(Some(Op::new_join(parse_opt_arg(args).unwrap_or_default())))
+    let (join_info, count) = if let Some(delimiter) = parse_opt_arg(args) {
+        if let Some(leading) = parse_opt_arg(args) {
+            if let Some(ending) = parse_opt_arg(args) {
+                if let Some(count) = args.peek()
+                    && let Ok(count) = count.parse::<usize>()
+                {
+                    args.next();
+                    (JoinInfo { delimiter, leading, ending }, Some(count))
+                } else {
+                    (JoinInfo { delimiter, leading, ending }, None)
+                }
+            } else {
+                (JoinInfo { delimiter, leading, ending: String::new() }, None)
+            }
+        } else {
+            (JoinInfo { delimiter, leading: String::new(), ending: String::new() }, None)
+        }
+    } else {
+        (JoinInfo::default(), None)
+    };
+
+    Ok(Some(Op::new_join(join_info, count)))
 }
 
 fn parse_sort(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Option<Op>, RpErr> {
