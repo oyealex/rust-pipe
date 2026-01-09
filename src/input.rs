@@ -1,5 +1,6 @@
 use crate::err::RpErr;
-use crate::{Float, Integer, RpRes};
+use crate::pipe::Pipe;
+use crate::{Float, Integer, PipeRes};
 use cmd_help::CmdHelp;
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
@@ -160,102 +161,69 @@ impl Input {
     }
 }
 
-pub(crate) enum Pipe {
-    Unbounded(Box<dyn Iterator<Item = Item>>),
-    Bounded(Box<dyn DoubleEndedIterator<Item = Item>>),
-}
+impl TryInto<Pipe> for Input {
+    type Error = RpErr;
 
-impl Pipe {
-    pub(crate) fn op_map(self, f: impl FnMut(Item) -> Item + 'static) -> Pipe {
+    fn try_into(self) -> PipeRes {
         match self {
-            Pipe::Unbounded(iter) => Pipe::Unbounded(Box::new(iter.map(f))),
-            Pipe::Bounded(iter) => Pipe::Unbounded(Box::new(iter.map(f))),
-        }
-    }
-
-    pub(crate) fn op_filter(self, f: impl FnMut(&Item) -> bool + 'static) -> Pipe {
-        match self {
-            Pipe::Unbounded(iter) => Pipe::Unbounded(Box::new(iter.filter(f))),
-            Pipe::Bounded(iter) => Pipe::Bounded(Box::new(iter.filter(f))),
-        }
-    }
-
-    pub(crate) fn op_inspect(self, f: impl FnMut(&Item) + 'static) -> Pipe {
-        match self {
-            Pipe::Unbounded(iter) => Pipe::Unbounded(Box::new(iter.inspect(f))),
-            Pipe::Bounded(iter) => Pipe::Bounded(Box::new(iter.inspect(f))),
-        }
-    }
-}
-
-impl Iterator for Pipe {
-    type Item = Item;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            Pipe::Unbounded(iter) => iter.next(),
-            Pipe::Bounded(iter) => iter.next(),
-        }
-    }
-}
-
-impl Input {
-    pub(crate) fn pipe(self) -> RpRes {
-        match self {
-            Input::StdIn => Ok(Pipe::Unbounded(Box::new(
-                io::stdin()
-                    .lock()
-                    .lines()
-                    .into_iter()
-                    .take_while(Result::is_ok)
-                    .map(|line| Item::String(line.unwrap())),
-            ))),
-            Input::File { files } => Ok(Pipe::Unbounded(Box::new(
-                files
-                    .into_iter()
-                    .map(|f| (File::open(&f), f))
-                    .map(|(r, f)| {
-                        match r {
-                            Ok(fin) => (fin, f),
-                            Err(err) => {
-                                // TODO 2026-01-05 01:18 根据全局配置选择跳过
-                                RpErr::OpenFileErr { file: f, err: err.to_string() }.termination();
+            Input::StdIn => Ok(Pipe {
+                iter: Box::new(
+                    io::stdin()
+                        .lock()
+                        .lines()
+                        .into_iter()
+                        .take_while(Result::is_ok)
+                        .map(|line| Item::String(line.unwrap())),
+                ),
+            }),
+            Input::File { files } => Ok(Pipe {
+                iter: Box::new(
+                    files
+                        .into_iter()
+                        .map(|f| (File::open(&f), f))
+                        .map(|(r, f)| {
+                            match r {
+                                Ok(fin) => (fin, f),
+                                Err(err) => {
+                                    // TODO 2026-01-05 01:18 根据全局配置选择跳过
+                                    RpErr::OpenFileErr { file: f, err: err.to_string() }.termination();
+                                }
                             }
-                        }
-                    })
-                    .map(|(fin, f)| (BufReader::new(fin), Rc::new(f)))
-                    .flat_map(|(reader, f)| BufRead::lines(reader).into_iter().enumerate().map(move |l| (l, f.clone())))
-                    .map(|((line, lr), f)| {
-                        match lr {
-                            Ok(line) => line,
-                            Err(err) => {
-                                // TODO 2026-01-05 01:18 根据全局配置选择跳过
-                                RpErr::ReadFromFileErr { file: (*f).clone(), line_no: line, err: err.to_string() }
-                                    .termination();
+                        })
+                        .map(|(fin, f)| (BufReader::new(fin), Rc::new(f)))
+                        .flat_map(|(reader, f)| {
+                            BufRead::lines(reader).into_iter().enumerate().map(move |l| (l, f.clone()))
+                        })
+                        .map(|((line, lr), f)| {
+                            match lr {
+                                Ok(line) => line,
+                                Err(err) => {
+                                    // TODO 2026-01-05 01:18 根据全局配置选择跳过
+                                    RpErr::ReadFromFileErr { file: (*f).clone(), line_no: line, err: err.to_string() }
+                                        .termination();
+                                }
                             }
-                        }
-                    })
-                    .map(|line| Item::String(line)),
-            ))),
+                        })
+                        .map(|line| Item::String(line)),
+                ),
+            }),
             Input::Clip => match clipboard_win::get_clipboard_string() {
                 // TODO 2026-01-05 01:02 尝试leak text，然后使用Item::Str省略内存分配
-                Ok(text) => Ok(Pipe::Bounded(Box::new(
-                    text.lines().map(|s| Item::String(s.to_string())).collect::<Vec<_>>().into_iter(),
-                ))),
+                Ok(text) => Ok(Pipe {
+                    iter: Box::new(text.lines().map(|s| Item::String(s.to_string())).collect::<Vec<_>>().into_iter()),
+                }),
                 Err(err) => Err(RpErr::ReadClipboardTextErr(err.to_string())),
             },
-            Input::Of { values } => Ok(Pipe::Bounded(Box::new(values.into_iter().map(Item::String)))),
+            Input::Of { values } => Ok(Pipe { iter: Box::new(values.into_iter().map(Item::String)) }),
+            // TODO 2025-12-28 21:59 如果gen没有指定end，设定为Unbounded。
             Input::Gen { start, end, included, step } => {
-                // TODO 2025-12-28 21:59 如果没有指定end，设定为Unbounded。
-                Ok(Pipe::Bounded(Box::new(range_to_iter(start, end, included, step).map(|x| Item::Integer(x)))))
+                Ok(Pipe { iter: Box::new(range_to_iter(start, end, included, step).map(|x| Item::Integer(x))) })
             }
-            Input::Repeat { value, count } => {
-                if count.is_none() {
-                    Ok(Pipe::Unbounded(Box::new(repeat(Item::String(value)))))
-                } else {
-                    Ok(Pipe::Bounded(Box::new(repeat(Item::String(value)).take(count.unwrap()))))
-                }
-            }
+            Input::Repeat { value, count } => Ok(if count.is_none() {
+                Pipe { iter: Box::new(repeat(Item::String(value))) }
+            } else {
+                Pipe { iter: Box::new(repeat(Item::String(value)).take(count.unwrap())) }
+            }),
         }
     }
 }

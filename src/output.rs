@@ -1,5 +1,5 @@
 use crate::err::RpErr;
-use crate::input::Pipe;
+use crate::pipe::Pipe;
 use cmd_help::CmdHelp;
 use itertools::Itertools;
 use std::fs::OpenOptions;

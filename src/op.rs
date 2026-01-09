@@ -1,7 +1,8 @@
 use crate::config::{is_nocase, Config};
 use crate::err::RpErr;
-use crate::input::{Item, Pipe};
-use crate::{Float, Integer, RpRes};
+use crate::input::Item;
+use crate::pipe::Pipe;
+use crate::{Float, Integer, PipeRes};
 use cmd_help::CmdHelp;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
@@ -137,7 +138,7 @@ impl Op {
         Op::Sort { sort_by, desc }
     }
 
-    pub(crate) fn wrap(self, mut pipe: Pipe, configs: &'static [Config]) -> RpRes {
+    pub(crate) fn wrap(self, mut pipe: Pipe, configs: &'static [Config]) -> PipeRes {
         match self {
             Op::Peek(peek) => match peek {
                 PeekTo::StdOut => Ok(pipe.op_inspect(|item| println!("{item}"))),
@@ -246,17 +247,19 @@ impl Op {
                 if let Some(count) = count {
                     if count > 0 {
                         println!("{:?}", pipe.size_hint());
-                        return Ok(Pipe::Unbounded(Box::new(ChunkJoin { source: pipe, group_size: count, join_info })));
+                        return Ok(Pipe { iter: Box::new(ChunkJoin { source: pipe, group_size: count, join_info }) });
                     } else {
                         unreachable!("join count must be greater than zero");
                     }
                 }
-                Ok(Pipe::Bounded(Box::new(std::iter::once(Item::String(format!(
-                    "{}{}{}",
-                    join_info.leading,
-                    pipe.join(&join_info.delimiter),
-                    join_info.ending
-                ))))))
+                Ok(Pipe {
+                    iter: Box::new(std::iter::once(Item::String(format!(
+                        "{}{}{}",
+                        join_info.leading,
+                        pipe.join(&join_info.delimiter),
+                        join_info.ending
+                    )))),
+                })
             }
             Op::Sort { sort_by, desc } => match sort_by {
                 SortBy::Num(def_integer, def_float) => {
@@ -267,7 +270,7 @@ impl Op {
                         } else {
                             pipe.sorted_by_key(key_fn)
                         };
-                        return Ok(Pipe::Bounded(Box::new(new_pipe)));
+                        return Ok(Pipe { iter: Box::new(new_pipe) });
                     }
                     let def = def_float.unwrap_or(Float::MAX); // 默认按照浮点最大值
                     let key_fn = move |item: &Item| OrderedFloat(Float::try_from(item).unwrap_or(def));
@@ -276,7 +279,7 @@ impl Op {
                     } else {
                         pipe.sorted_by_key(key_fn)
                     };
-                    Ok(Pipe::Bounded(Box::new(new_pipe)))
+                    Ok(Pipe { iter: Box::new(new_pipe) })
                 }
                 SortBy::Text(nocase) => {
                     // TODO 2026-01-08 02:34 使用UniCase优化其他nocase场景
@@ -293,12 +296,12 @@ impl Op {
                             pipe.sorted_by_key(|item| item.to_string())
                         }
                     };
-                    Ok(Pipe::Bounded(Box::new(iter)))
+                    Ok(Pipe { iter: Box::new(iter) })
                 }
                 SortBy::Random => {
                     let mut v = pipe.collect::<Vec<_>>();
                     v.shuffle(&mut rand::rng());
-                    Ok(Pipe::Bounded(Box::new(v.into_iter())))
+                    Ok(Pipe { iter: Box::new(v.into_iter()) })
                 }
             },
         }

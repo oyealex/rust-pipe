@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::err::RpErr;
-use crate::input::Pipe;
+use crate::pipe::Pipe;
 
 mod config;
 mod err;
@@ -9,12 +9,12 @@ mod input;
 mod op;
 mod output;
 mod parse;
-mod sink;
+mod pipe;
 
 pub(crate) type Integer = i64;
 pub(crate) type Float = f64;
 
-pub(crate) type RpRes = Result<Pipe, RpErr>;
+pub(crate) type PipeRes = Result<Pipe, RpErr>;
 
 fn main() {
     if let Err(e) = run() {
@@ -38,7 +38,7 @@ fn run() -> Result<(), RpErr> {
         config::print_pipe_info(&input, &ops, &output);
     }
     let configs: &'static mut [Config] = configs.leak();
-    let mut pipe = input.pipe()?;
+    let mut pipe = input.try_into()?;
     for op in ops {
         pipe = op.wrap(pipe, configs)?;
     }
