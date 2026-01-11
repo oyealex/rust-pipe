@@ -55,6 +55,10 @@ pub(crate) enum RpErr {
     /// 13      写入数据到文件失败。
     #[error("[WriteToFileErr] Write item `{item}` to file `{file}` error: {err}")]
     WriteToFileErr { file: String, item: String, err: String },
+
+    /// 14      格式化字符串失败。
+    #[error("[FormatStringErr] Format string by {fmt} with `{value}` error at: {err_pos}")]
+    FormatStringErr { fmt: String, value: String, err_pos: usize },
 }
 
 impl Termination for RpErr {
@@ -87,6 +91,7 @@ impl RpErr {
             RpErr::WriteToClipboardErr(_) => code.next().unwrap(),
             RpErr::OpenFileErr { .. } => code.next().unwrap(),
             RpErr::WriteToFileErr { .. } => code.next().unwrap(),
+            RpErr::FormatStringErr { .. } => code.next().unwrap(),
         }
     }
 }

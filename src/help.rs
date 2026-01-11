@@ -18,6 +18,7 @@ pub(crate) fn print_help(topic: Option<String>) {
                 "input" => print_input_help(),
                 "op" => print_op_help(),
                 "output" => print_output_help(),
+                "fmt" => print_fmt_help(),
                 "code" => print_code_help(),
                 _ => (),
             }
@@ -32,6 +33,7 @@ fn print_all_help() {
     print_input_help();
     print_op_help();
     print_output_help();
+    print_fmt_help();
     print_code_help();
 }
 
@@ -66,6 +68,10 @@ fn print_output_help() {
     for (_, help) in Output::all_help() {
         println!("{}", help);
     }
+}
+
+fn print_fmt_help() {
+    println!("\n格式化：（TODO）");
 }
 
 fn print_code_help() {

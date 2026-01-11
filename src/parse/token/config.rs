@@ -3,7 +3,7 @@ use crate::parse::token::ParserError;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::space1;
-use nom::combinator::map;
+use nom::combinator::{map, opt};
 use nom::error::context;
 use nom::multi::many0;
 use nom::sequence::terminated;
@@ -18,11 +18,11 @@ fn parse_config(input: &str) -> IResult<&str, Config, ParserError<'_>> {
         "Config",
         terminated(
             alt((
-                map(tag("-h"), |_| Config::Help),
-                map(tag("-V"), |_| Config::Version),
-                map(tag("-v"), |_| Config::Verbose),
-                map(tag("-d"), |_| Config::DryRun),
-                map(tag("--nocase"), |_| Config::Nocase),
+                map(opt((tag("-h"), tag("--help"))), |_| Config::Help),
+                map(opt((tag("-V"), tag("--version"))), |_| Config::Version),
+                map(opt((tag("-v"), tag("--verbose"))), |_| Config::Verbose),
+                map(opt((tag("-d"), tag("--dry-run"))), |_| Config::DryRun),
+                map(opt((tag("--nocase"), tag("--nocase"))), |_| Config::Nocase),
             )),
             space1,
         ),

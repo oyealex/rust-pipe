@@ -27,13 +27,13 @@ pub(crate) enum Config {
     DryRun,
     /// -n,--nocase     全局忽略大小写。
     Nocase,
-    /// -e,--eval       以Token模式解析下一个参数。
+    /// -t,--token      以Token模式解析下一个参数。
     ///                 除了紧跟的第一个参数外，其他参数会被忽略。
-    ///                 -e|--eval <token>
+    ///                 -t|--token <token>
     ///                     <token> 需要解析的文本参数，必选。
     ///                 例如：
     ///                     -e ':in :uniq :to out'
-    Eval,
+    Token,
 }
 
 #[inline]

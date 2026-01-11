@@ -171,7 +171,7 @@ impl Op {
                         item
                     }
                 }
-                Item::Integer(_) | Item::Float(_) => item,
+                Item::Integer(_) => item,
             })),
             Op::Lower => Ok(pipe.op_map(|mut item| match &mut item {
                 // OPT 2026-12-29 01:24 Pipe增加属性以优化重复大小写。
@@ -183,7 +183,7 @@ impl Op {
                         item
                     }
                 }
-                Item::Integer(_) | Item::Float(_) => item,
+                Item::Integer(_) => item,
             })),
             Op::Case => {
                 Ok(pipe.op_map(|mut item| match &mut item {
@@ -199,7 +199,7 @@ impl Op {
                         }
                         item
                     }
-                    Item::Integer(_) | Item::Float(_) => item,
+                    Item::Integer(_) => item,
                 }))
             }
             Op::Replace { from, to, count, nocase } => {
@@ -215,7 +215,7 @@ impl Op {
                                 Cow::Owned(string) => Item::String(string),
                             }
                         }
-                        Item::Integer(_) | Item::Float(_) => {
+                        Item::Integer(_) => {
                             let string = item.to_string();
                             let cow =
                                 replace_with_count_and_nocase(&string, &*from, &*to, count, is_nocase(nocase, configs));
@@ -238,7 +238,7 @@ impl Op {
                                 s.clone()
                             }
                         }
-                        Item::Integer(_) | Item::Float(_) => item.to_string(),
+                        Item::Integer(_) => item.to_string(),
                     };
                     seen.insert(key) // 返回 true 表示保留（首次出现）
                 }))

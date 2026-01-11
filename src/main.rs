@@ -4,6 +4,7 @@ use crate::pipe::Pipe;
 
 mod config;
 mod err;
+mod fmt;
 mod help;
 mod input;
 mod op;
@@ -33,7 +34,7 @@ fn run() -> Result<(), RpErr> {
         return Ok(());
     }
     let (input, ops, output) =
-        if configs.contains(&Config::Eval) { config::parse_eval_token(&mut args)? } else { parse::args::parse(args)? };
+        if configs.contains(&Config::Token) { config::parse_eval_token(&mut args)? } else { parse::args::parse(args)? };
     if configs.contains(&Config::Verbose) {
         config::print_pipe_info(&input, &ops, &output);
     }

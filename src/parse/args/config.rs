@@ -18,7 +18,7 @@ fn parse_config(arg: Option<&String>) -> Option<Config> {
             "-v" | "--verbose" => Some(Config::Verbose),
             "-d" | "--dry-run" => Some(Config::DryRun),
             "-n" | "--nocase" => Some(Config::Nocase),
-            "-e" | "--eval" => Some(Config::Eval),
+            "-t" | "--token" => Some(Config::Token),
             _ => None, // 遇到未知参数，停止解析
         },
         None => None,

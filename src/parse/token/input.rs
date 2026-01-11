@@ -51,11 +51,28 @@ fn parse_of(input: &str) -> InputResult<'_> {
 }
 
 fn parse_gen(input: &str) -> InputResult<'_> {
-    context("Input::Gen", terminated(preceded(tag_no_case(":gen"), preceded(space1, parse_range_in_gen)), space1))
-        .parse(input)
+    context(
+        "Input::Gen",
+        map(
+            terminated(
+                preceded(
+                    tag_no_case(":gen"), // 命令
+                    (
+                        context("Input::Gen::<range>", preceded(space1, parse_range_in_gen)), // 范围
+                        opt(preceded(space1, arg_exclude_cmd)),                               // 格式化字符串
+                    ),
+                ),
+                space1, // 结尾空白
+            ),
+            |((start, end, included, step), fmt)| Input::new_gen(start, end, included, step, fmt),
+        ),
+    )
+    .parse(input)
 }
 
-pub(in crate::parse) fn parse_range_in_gen(input: &str) -> InputResult<'_> {
+pub(in crate::parse) fn parse_range_in_gen(
+    input: &str,
+) -> IResult<&str, (Integer, Integer, bool, Integer), ParserError<'_>> {
     map(
         alt((
             // OPT 2025-12-28 23:16 使用opt重构？
@@ -73,7 +90,7 @@ pub(in crate::parse) fn parse_range_in_gen(input: &str) -> InputResult<'_> {
             ), // 0,,2
             (parse_integer, success(','), success(' '), success(Integer::MAX), success(','), success(1)), // 0
         )),
-        |(start, _, close, end, _, step)| Input::new_gen(start, end, close == '=', step),
+        |(start, _, close, end, _, step)| (start, end, close == '=', step),
     )
     .parse(input)
 }
@@ -150,18 +167,17 @@ mod tests {
 
     #[test]
     fn test_parse_gen() {
-        // 0,=10,2
-        assert_eq!(parse_gen(":gen 0,=10,2 "), Ok(("", Input::new_gen(0, 10, true, 2))));
-        // 0,10,2
-        assert_eq!(parse_gen(":gen 0,10,2 "), Ok(("", Input::new_gen(0, 10, false, 2))));
-        // 0,=10
-        assert_eq!(parse_gen(":gen 0,=10 "), Ok(("", Input::new_gen(0, 10, true, 1))));
-        // 0,10
-        assert_eq!(parse_gen(":gen 0,10 "), Ok(("", Input::new_gen(0, 10, false, 1))));
-        // 0,,2
-        assert_eq!(parse_gen(":gen 0,,2 "), Ok(("", Input::new_gen(0, i64::MAX, false, 2))));
-        // 0
-        assert_eq!(parse_gen(":gen 0 "), Ok(("", Input::new_gen(0, i64::MAX, false, 1))));
+        assert_eq!(parse_gen(":gen 0          "), Ok(("", Input::new_gen(0, Integer::MAX, false, 1, None))));
+        assert_eq!(parse_gen(":gen 0,10       "), Ok(("", Input::new_gen(0, 10, false, 1, None))));
+        assert_eq!(parse_gen(":gen 0,=10      "), Ok(("", Input::new_gen(0, 10, true, 1, None))));
+        assert_eq!(parse_gen(":gen 0,10,2     "), Ok(("", Input::new_gen(0, 10, false, 2, None))));
+        assert_eq!(parse_gen(":gen 0,=10,2    "), Ok(("", Input::new_gen(0, 10, true, 2, None))));
+        assert_eq!(parse_gen(":gen 0,,2       "), Ok(("", Input::new_gen(0, Integer::MAX, false, 2, None))));
+        assert_eq!(parse_gen(":gen 10,0       "), Ok(("", Input::new_gen(10, 0, false, 1, None))));
+        assert_eq!(parse_gen(":gen 0,10,-1    "), Ok(("", Input::new_gen(0, 10, false, -1, None))));
+        assert_eq!(parse_gen(":gen 0,=10,-1   "), Ok(("", Input::new_gen(0, 10, true, -1, None))));
+        assert_eq!(parse_gen(":gen 0,=10,-3   "), Ok(("", Input::new_gen(0, 10, true, -3, None))));
+        assert_eq!(parse_gen(":gen 0,10 n{v}  "), Ok(("", Input::new_gen(0, 10, false, 1, Some("n{v}".to_string())))));
     }
 
     #[test]

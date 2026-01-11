@@ -84,16 +84,21 @@ fn cmd_arg1<'a>(
 fn arg_exclude_cmd(input: &str) -> IResult<&str, String, ParserError<'_>> {
     context(
         "arg_non_cmd",
-        map(verify(arg, |s: &String| cmd_token(s).is_err()), |s| {
+        map(verify(arg, |s: &String| whole_cmd_token(s).is_err()), |s| {
             if let Some(stripped) = s.strip_prefix("::") { format!(":{}", stripped) } else { s.to_owned() }
         }),
     )
     .parse(input)
 }
 
-pub(in crate::parse) fn cmd_token(input: &str) -> IResult<&str, &str, ParserError<'_>> {
+fn cmd_token(input: &str) -> IResult<&str, &str, ParserError<'_>> {
     recognize((char(':'), take_while1(|c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')))
         .parse(input)
+}
+
+/// 判断是否整个token为命令格式。
+pub(in crate::parse) fn whole_cmd_token(input: &str) -> IResult<&str, &str, ParserError<'_>> {
+    recognize((cmd_token, eof)).parse(input)
 }
 
 /// 按照类PosixShell的规则解析单个参数
@@ -240,6 +245,7 @@ mod tests {
         assert!(arg_exclude_cmd(":arg1 arg2").is_err());
         assert_eq!(arg_exclude_cmd("::arg1 arg2"), Ok((" arg2", ":arg1".to_string())));
         assert_eq!(arg_exclude_cmd("'::arg1 arg2'"), Ok(("", ":arg1 arg2".to_string())));
+        assert_eq!(arg_exclude_cmd("'arg a' :cmd"), Ok((" :cmd", "arg a".to_string())));
     }
 
     #[test]

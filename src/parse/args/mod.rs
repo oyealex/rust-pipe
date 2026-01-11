@@ -22,7 +22,7 @@ pub(crate) fn parse(mut args: Peekable<impl Iterator<Item = String>>) -> Result<
     if !remaining.is_empty() { Err(RpErr::UnknownArgs { args: remaining }) } else { Ok((input, ops, output)) }
 }
 
-/// 解析一个或多个参数
+/// 解析一个或多个参数，参数不为命令格式，处理冒号转义
 fn parse_arg1(
     args: &mut Peekable<impl Iterator<Item = String>>, cmd: &'static str, arg: &'static str,
 ) -> Result<Vec<String>, RpErr> {
@@ -30,22 +30,19 @@ fn parse_arg1(
     if res.is_empty() { Err(RpErr::MissingArg { cmd, arg }) } else { Ok(res) }
 }
 
-/// 解析零个或多个参数
+/// 解析零个或多个参数，参数不为命令格式，处理冒号转义
 fn parse_arg0(args: &mut Peekable<impl Iterator<Item = String>>) -> Vec<String> {
     let mut res = Vec::new();
-    while let Some(value) = args.peek()
-        && crate::parse::token::cmd_token(value).is_err()
-    {
-        let arg = args.next().unwrap();
-        res.push(if let Some(stripped) = arg.strip_prefix("::") { format!(":{}", stripped) } else { arg });
+    while let Some(arg) = parse_opt_arg(args) {
+        res.push(arg);
     }
     res
 }
 
-/// 解析一个可选的参数，参数不为命令格式，处理转义
+/// 解析一个可选的参数，参数不为命令格式，处理冒号转义
 fn parse_opt_arg(args: &mut Peekable<impl Iterator<Item = String>>) -> Option<String> {
     if let Some(value) = args.peek()
-        && crate::parse::token::cmd_token(value).is_err()
+        && crate::parse::token::whole_cmd_token(value).is_err()
     {
         let arg = args.next().unwrap();
         let arg = crate::parse::token::escape_string(&arg).unwrap_or(arg);
@@ -106,10 +103,7 @@ where
 fn parse_general_file_info(
     args: &mut Peekable<impl Iterator<Item = String>>, optional: bool,
 ) -> Option<(String, bool, Option<bool>)> {
-    if let Some(value) = args.peek()
-        && (optional && crate::parse::token::cmd_token(value).is_err() || !optional)
-    {
-        let file = args.next().unwrap();
+    if let Some(file) = if optional { parse_opt_arg(args) } else { args.next() } {
         let (append, crlf) = if let Some(append_or_postfix) = args.peek() {
             if append_or_postfix.eq_ignore_ascii_case("append") {
                 args.next(); // 消耗`append`

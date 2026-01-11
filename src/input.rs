@@ -1,4 +1,5 @@
 use crate::err::RpErr;
+use crate::fmt::{fmt_args, FmtArg};
 use crate::pipe::Pipe;
 use crate::{Float, Integer, PipeRes};
 use cmd_help::CmdHelp;
@@ -14,7 +15,6 @@ use std::rc::Rc;
 pub(crate) enum Item {
     String(String),
     Integer(Integer),
-    Float(Float),
 }
 
 impl From<Item> for String {
@@ -22,7 +22,6 @@ impl From<Item> for String {
         match value {
             Item::String(string) => string,
             Item::Integer(integer) => integer.to_string(),
-            Item::Float(float) => float.to_string(),
         }
     }
 }
@@ -32,7 +31,6 @@ impl From<&Item> for String {
         match value {
             Item::String(string) => string.to_string(),
             Item::Integer(integer) => integer.to_string(),
-            Item::Float(float) => float.to_string(),
         }
     }
 }
@@ -44,17 +42,6 @@ impl TryFrom<&Item> for Integer {
         match value {
             Item::String(string) => string.parse::<Integer>().map_err(|_| ()),
             Item::Integer(integer) => Ok(*integer),
-            Item::Float(float) => {
-                if !float.is_finite() // 检查是否为 NaN 或无穷
-                    || *float < Integer::MIN as Float // 检查是否在 Integer 范围内
-                    || *float > Integer::MAX as Float // 检查是否为整数（无小数部分）
-                    || (*float).fract() != 0.0
-                {
-                    Err(())
-                } else {
-                    Ok(*float as Integer)
-                }
-            }
         }
     }
 }
@@ -66,7 +53,6 @@ impl TryFrom<&Item> for Float {
         match value {
             Item::String(string) => string.parse::<Float>().map_err(|_| ()),
             Item::Integer(integer) => Ok(*integer as Float),
-            Item::Float(float) => Ok(*float),
         }
     }
 }
@@ -76,7 +62,6 @@ impl Display for Item {
         match self {
             Item::String(string) => write!(f, "{string}"),
             Item::Integer(integer) => write!(f, "{integer}"),
-            Item::Float(float) => write!(f, "{float}"),
         }
     }
 }
@@ -86,7 +71,6 @@ impl Item {
         match self {
             Item::String(s) => Cow::Borrowed(s),
             Item::Integer(i) => Cow::Owned(i.to_string()),
-            Item::Float(f) => Cow::Owned(f.to_string()),
         }
     }
 }
@@ -112,8 +96,8 @@ pub(crate) enum Input {
     ///                 :of line
     ///                 :of line1 "line 2" 'line 3'
     Of { values: Vec<String> },
-    /// :gen        生成指定范围内的整数作为整数类型输入。
-    ///             :gen <start>[,[[=]<end>][,<step>]]
+    /// :gen        生成指定范围内的整数作为整数类型输入，支持进一步格式化为字符串。
+    ///             :gen <start>[,[[=]<end>][,<step>]][ <fmt>]
     ///                 <start> 起始值，包含，必须。
     ///                 <end>   结束值，指定'='时包含，否则不包含，可选。
     ///                         未指定时生成到整数最大值（取决于构建版本）。
@@ -121,6 +105,8 @@ pub(crate) enum Input {
     ///                 <step>  步长，不能为0，可选，未指定时取步长为1。
     ///                         如果步长为正值，表示正序生成；
     ///                         如果步长为负值，表示逆序生成。
+    ///                 <fmt>   格式化字符串，以{v}表示生成的整数值。
+    ///                         更多格式化信息参考`-h fmt`。
     ///             例如：
     ///                 :gen 0          生成：0 1 2 3 4 5 ...
     ///                 :gen 0,10       生成：0 1 2 3 4 5 6 7 8 9
@@ -132,7 +118,12 @@ pub(crate) enum Input {
     ///                 :gen 0,10,-1    生成：9 8 7 6 5 4 3 2 1
     ///                 :gen 0,=10,-1   生成：10 9 8 7 6 5 4 3 2 1
     ///                 :gen 0,=10,-3   生成：10 7 4 1
-    Gen { start: Integer, end: Integer, included: bool, step: Integer },
+    ///                 :gen 0,10 n{v}  生成：n0 n1 n2 n3 n4 n5 n6 n7 n8 n9
+    ///                 :gen 0,10 "Hex of {v} is {v:#04x}" 生成：
+    ///                                 "Hex of 0 is 0x00"
+    ///                                 "Hex of 1 is 0x01"
+    ///                                 ...
+    Gen { start: Integer, end: Integer, included: bool, step: Integer, fmt: Option<String> },
     /// :repeat     重复字面值作为整数类型输入。
     ///             :repeat <value>[ <count>]
     ///                 <value> 需要重复的字面值，必选。
@@ -153,8 +144,8 @@ impl Input {
     pub(crate) fn new_of(values: Vec<String>) -> Input {
         Input::Of { values }
     }
-    pub(crate) fn new_gen(start: Integer, end: Integer, included: bool, step: Integer) -> Input {
-        Input::Gen { start, end, included, step }
+    pub(crate) fn new_gen(start: Integer, end: Integer, included: bool, step: Integer, fmt: Option<String>) -> Input {
+        Input::Gen { start, end, included, step, fmt }
     }
     pub(crate) fn new_repeat(value: String, count: Option<usize>) -> Input {
         Input::Repeat { value, count }
@@ -216,8 +207,19 @@ impl TryInto<Pipe> for Input {
             },
             Input::Of { values } => Ok(Pipe { iter: Box::new(values.into_iter().map(Item::String)) }),
             // TODO 2025-12-28 21:59 如果gen没有指定end，设定为Unbounded。
-            Input::Gen { start, end, included, step } => {
-                Ok(Pipe { iter: Box::new(range_to_iter(start, end, included, step).map(|x| Item::Integer(x))) })
+            Input::Gen { start, end, included, step, fmt } => {
+                if let Some(fmt) = fmt {
+                    Ok(Pipe {
+                        iter: Box::new(range_to_iter(start, end, included, step).map(move |x| {
+                            match fmt_args(&fmt, &[("v", FmtArg::from(x))]) {
+                                Ok(string) => Item::String(string),
+                                Err(err) => err.termination(),
+                            }
+                        })),
+                    })
+                } else {
+                    Ok(Pipe { iter: Box::new(range_to_iter(start, end, included, step).map(|x| Item::Integer(x))) })
+                }
             }
             Input::Repeat { value, count } => Ok(if count.is_none() {
                 Pipe { iter: Box::new(repeat(Item::String(value))) }
