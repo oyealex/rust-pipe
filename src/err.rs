@@ -59,6 +59,10 @@ pub(crate) enum RpErr {
     /// 14      格式化字符串失败。
     #[error("[FormatStringErr] Format string by {fmt} with `{value}` error at: {err_pos}")]
     FormatStringErr { fmt: String, value: String, err_pos: usize },
+
+    /// 15      无效的正则表达式。
+    #[error("[ParseRegexErr] Parse regex {reg:?} err: {err}")]
+    ParseRegexErr { reg: String, err: String},
 }
 
 impl Termination for RpErr {
@@ -92,6 +96,7 @@ impl RpErr {
             RpErr::OpenFileErr { .. } => code.next().unwrap(),
             RpErr::WriteToFileErr { .. } => code.next().unwrap(),
             RpErr::FormatStringErr { .. } => code.next().unwrap(),
+            RpErr::ParseRegexErr { .. } => code.next().unwrap(),
         }
     }
 }

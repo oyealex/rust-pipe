@@ -64,33 +64,24 @@ fn parse_gen(input: &str) -> InputResult<'_> {
                 ),
                 space1, // 结尾空白
             ),
-            |((start, end, included, step), fmt)| Input::new_gen(start, end, included, step, fmt),
+            |((start, end, step), fmt)| Input::new_gen(start, end, step, fmt),
         ),
     )
     .parse(input)
 }
 
-pub(in crate::parse) fn parse_range_in_gen(
-    input: &str,
-) -> IResult<&str, (Integer, Integer, bool, Integer), ParserError<'_>> {
+pub(in crate::parse) fn parse_range_in_gen(input: &str) -> IResult<&str, (Integer, Integer, Integer), ParserError<'_>> {
     map(
         alt((
             // OPT 2025-12-28 23:16 使用opt重构？
-            (parse_integer, char(','), char('='), parse_integer, char(','), verify(parse_integer, |s| *s != 0)), // 0,=10,2
-            (parse_integer, char(','), success(' '), parse_integer, char(','), verify(parse_integer, |s| *s != 0)), // 0,10,2
-            (parse_integer, char(','), char('='), parse_integer, success(','), success(1)), // 0,=10
-            (parse_integer, char(','), success(' '), parse_integer, success(','), success(1)), // 0,10
-            (
-                parse_integer,
-                char(','),
-                success(' '),
-                success(Integer::MAX),
-                char(','),
-                verify(parse_integer, |s| *s != 0),
-            ), // 0,,2
-            (parse_integer, success(','), success(' '), success(Integer::MAX), success(','), success(1)), // 0
+            (parse_integer, char(','), parse_integer, char(','), verify(parse_integer, |s| *s != 0)), // 0,=10,2
+            (parse_integer, char(','), parse_integer, char(','), verify(parse_integer, |s| *s != 0)), // 0,10,2
+            (parse_integer, char(','), parse_integer, success(','), success(1)),                      // 0,=10
+            (parse_integer, char(','), parse_integer, success(','), success(1)),                      // 0,10
+            (parse_integer, char(','), success(Integer::MAX), char(','), verify(parse_integer, |s| *s != 0)), // 0,,2
+            (parse_integer, success(','), success(Integer::MAX), success(','), success(1)),           // 0
         )),
-        |(start, _, close, end, _, step)| (start, end, close == '=', step),
+        |(start, _, end, _, step)| (start, end, step),
     )
     .parse(input)
 }
@@ -167,17 +158,13 @@ mod tests {
 
     #[test]
     fn test_parse_gen() {
-        assert_eq!(parse_gen(":gen 0          "), Ok(("", Input::new_gen(0, Integer::MAX, false, 1, None))));
-        assert_eq!(parse_gen(":gen 0,10       "), Ok(("", Input::new_gen(0, 10, false, 1, None))));
-        assert_eq!(parse_gen(":gen 0,=10      "), Ok(("", Input::new_gen(0, 10, true, 1, None))));
-        assert_eq!(parse_gen(":gen 0,10,2     "), Ok(("", Input::new_gen(0, 10, false, 2, None))));
-        assert_eq!(parse_gen(":gen 0,=10,2    "), Ok(("", Input::new_gen(0, 10, true, 2, None))));
-        assert_eq!(parse_gen(":gen 0,,2       "), Ok(("", Input::new_gen(0, Integer::MAX, false, 2, None))));
-        assert_eq!(parse_gen(":gen 10,0       "), Ok(("", Input::new_gen(10, 0, false, 1, None))));
-        assert_eq!(parse_gen(":gen 0,10,-1    "), Ok(("", Input::new_gen(0, 10, false, -1, None))));
-        assert_eq!(parse_gen(":gen 0,=10,-1   "), Ok(("", Input::new_gen(0, 10, true, -1, None))));
-        assert_eq!(parse_gen(":gen 0,=10,-3   "), Ok(("", Input::new_gen(0, 10, true, -3, None))));
-        assert_eq!(parse_gen(":gen 0,10 n{v}  "), Ok(("", Input::new_gen(0, 10, false, 1, Some("n{v}".to_string())))));
+        assert_eq!(parse_gen(":gen 0          "), Ok(("", Input::new_gen(0, Integer::MAX, 1, None))));
+        assert_eq!(parse_gen(":gen 0,10       "), Ok(("", Input::new_gen(0, 10, 1, None))));
+        assert_eq!(parse_gen(":gen 0,10,2     "), Ok(("", Input::new_gen(0, 10, 2, None))));
+        assert_eq!(parse_gen(":gen 0,,2       "), Ok(("", Input::new_gen(0, Integer::MAX, 2, None))));
+        assert_eq!(parse_gen(":gen 10,0       "), Ok(("", Input::new_gen(10, 0, 1, None))));
+        assert_eq!(parse_gen(":gen 0,10,-1    "), Ok(("", Input::new_gen(0, 10, -1, None))));
+        assert_eq!(parse_gen(":gen 0,10 n{v}  "), Ok(("", Input::new_gen(0, 10, 1, Some("n{v}".to_string())))));
     }
 
     #[test]

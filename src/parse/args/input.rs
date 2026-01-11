@@ -45,11 +45,11 @@ fn parse_gen(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Input,
     args.next(); // 消耗命令文本
     let range = args.next().ok_or_else(|| RpErr::MissingArg { cmd: ":gen", arg: "range" })?;
     match crate::parse::token::input::parse_range_in_gen(&range) {
-        Ok((remaining, (start, end, included, step))) => {
+        Ok((remaining, (start, end, step))) => {
             if !remaining.is_empty() {
                 Err(RpErr::UnexpectedRemaining { cmd: ":gen", arg: "range", remaining: remaining.to_string() })
             } else {
-                Ok(Input::new_gen(start, end, included, step, parse_opt_arg(args)))
+                Ok(Input::new_gen(start, end, step, parse_opt_arg(args)))
             }
         }
         Err(e) => {
@@ -140,27 +140,19 @@ mod tests {
     #[test]
     fn test_parse_gen() {
         let mut args = build_args(":gen 0");
-        assert_eq!(Ok(Input::new_gen(0, Integer::MAX, false, 1, None)), parse_input(&mut args));
+        assert_eq!(Ok(Input::new_gen(0, Integer::MAX, 1, None)), parse_input(&mut args));
         assert!(args.next().is_none());
 
         let mut args = build_args(":gen 0,10");
-        assert_eq!(Ok(Input::new_gen(0, 10, false, 1, None)), parse_input(&mut args));
-        assert!(args.next().is_none());
-
-        let mut args = build_args(":gen 0,=10");
-        assert_eq!(Ok(Input::new_gen(0, 10, true, 1, None)), parse_input(&mut args));
+        assert_eq!(Ok(Input::new_gen(0, 10, 1, None)), parse_input(&mut args));
         assert!(args.next().is_none());
 
         let mut args = build_args(":gen 0,10,2");
-        assert_eq!(Ok(Input::new_gen(0, 10, false, 2, None)), parse_input(&mut args));
-        assert!(args.next().is_none());
-
-        let mut args = build_args(":gen 0,=10,2");
-        assert_eq!(Ok(Input::new_gen(0, 10, true, 2, None)), parse_input(&mut args));
+        assert_eq!(Ok(Input::new_gen(0, 10, 2, None)), parse_input(&mut args));
         assert!(args.next().is_none());
 
         let mut args = build_args(":gen 0,,2");
-        assert_eq!(Ok(Input::new_gen(0, Integer::MAX, false, 2, None)), parse_input(&mut args));
+        assert_eq!(Ok(Input::new_gen(0, Integer::MAX, 2, None)), parse_input(&mut args));
         assert!(args.next().is_none());
 
         let mut args = build_args(":gen");

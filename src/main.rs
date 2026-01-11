@@ -11,6 +11,7 @@ mod op;
 mod output;
 mod parse;
 mod pipe;
+mod condition;
 
 pub(crate) type Integer = i64;
 pub(crate) type Float = f64;

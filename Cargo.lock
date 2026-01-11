@@ -239,6 +239,7 @@ dependencies = [
  "nom-language",
  "ordered-float",
  "rand",
+ "regex",
  "rt-format",
  "thiserror",
  "unicase",

@@ -1,3 +1,4 @@
+use crate::condition::Cond;
 use crate::op::{JoinInfo, Op, PeekTo, SortBy};
 use crate::parse::token::{arg, arg_exclude_cmd, general_file_info, ParserError};
 use crate::{Float, Integer};
@@ -205,6 +206,10 @@ fn parse_sort(input: &str) -> OpResult<'_> {
         ),
     )
     .parse(input)
+}
+
+pub(in crate::parse) fn parse_condition_text(input: &str) -> IResult<&str, Cond, ParserError<'_>> {
+    todo!()
 }
 
 #[cfg(test)]

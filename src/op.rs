@@ -44,7 +44,6 @@ pub(crate) enum Op {
     /// :case       切换ASCII大小写。
     Case,
     /// :replace    替换字符串。
-    ///             数值类型元素当作字符串进行替换，替换后转为字符串。
     ///             :replace <from> <to>[ <count>][ nocase]
     ///                 <from>  待替换的字符串，必选。
     ///                 <to>    待替换为的字符串，必选。
@@ -58,7 +57,6 @@ pub(crate) enum Op {
     Replace { from: String, to: String, count: Option<usize>, nocase: bool },
     /* **************************************** 减少 **************************************** */
     /// :uniq       去重。
-    ///             数值类型元素当作字符串处理，但是去重后仍为原数值类型。
     ///             :uniq[ nocase]
     ///                 nocase  去重时忽略大小写，可选，未指定时不忽略大小写。
     ///             例如：
@@ -66,7 +64,6 @@ pub(crate) enum Op {
     ///                 :uniq nocase
     Uniq { nocase: bool },
     /// :join       合并数据。
-    ///             数值类型元素当作字符串处理，支持按照数量分组合并。
     ///             :join<[ <delimiter>[ <prefix>[ <postfix>[ <size>]]]]
     ///                 <delimiter> 分隔字符串，可选。
     ///                 <prefix>    前缀字符串，可选。
@@ -80,8 +77,9 @@ pub(crate) enum Op {
     ///                 :join , [ ]
     ///                 :join , [ ] 3
     Join { join_info: JoinInfo, count: Option<usize> },
-    /// :drop       丢弃数据。
-    ///             :drop[ len <lower>][val ][ reg<reg_exp>]
+    /// :drop       根据指定条件选择数据丢弃。
+    ///             :drop <condition>
+    ///                 <condition> 条件表达式，参考`-h cond`或`-h condition`
     Drop,
     /* **************************************** 增加 **************************************** */
     /* **************************************** 调整位置 **************************************** */
@@ -386,5 +384,6 @@ mod tests {
             "1234a1234bc ABC abc abc"
         );
         assert_eq!(replace_with_count_and_nocase("abc", "", "_", None, true), "_a_b_c_");
+        assert_eq!(replace_with_count_and_nocase("abc你好世界，你好！", "你", "_", None, true), "abc_好世界，_好！");
     }
 }

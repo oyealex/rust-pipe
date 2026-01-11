@@ -9,34 +9,33 @@ use std::io::{BufRead, BufReader};
 use std::iter::repeat;
 use std::rc::Rc;
 
-
 #[derive(Debug, Eq, PartialEq, CmdHelp)]
 pub(crate) enum Input {
-    /// :in         从标准输入读取文本类型输入。
+    /// :in         从标准输入读取输入。
     ///             未指定元素输入时的默认输入。
     StdIn,
-    /// :file       从文件读取文本类型输入。
+    /// :file       从文件读取输入。
     ///             :file <file_name>[ <file_name>][...]
     ///                 <file_name> 文件路径，至少指定一个。
     ///             例如：
     ///                 :file input.txt
     ///                 :file input1.txt input2.txt input3.txt
     File { files: Vec<String> },
-    /// :clip       从剪切板读取文本类型输入。
+    /// :clip       从剪切板读取输入。
     Clip,
-    /// :of         使用直接字面值作为文本类型输入。
+    /// :of         使用直接字面值作为输入。
     ///             :of <text>[ <text][...]
     ///                 <text>  字面值，至少指定一个，如果以':'开头，需要使用'::'转义。
     ///             例如：
     ///                 :of line
     ///                 :of line1 "line 2" 'line 3'
     Of { values: Vec<String> },
-    /// :gen        生成指定范围内的整数作为整数类型输入，支持进一步格式化为字符串。
-    ///             :gen <start>[,[[=]<end>][,<step>]][ <fmt>]
+    /// :gen        生成指定范围内的整数作为输入，支持进一步格式化。
+    ///             :gen <start>[,[<end>][,<step>]][ <fmt>]
     ///                 <start> 起始值，包含，必须。
-    ///                 <end>   结束值，指定'='时包含，否则不包含，可选。
+    ///                 <end>   结束值，包含，可选。
     ///                         未指定时生成到整数最大值（取决于构建版本）。
-    ///                         如果起始值和结束值表示的范围为空，则无数据生成。
+    ///                         如果范围为空（起始值大于结束值），则无数据生成。
     ///                 <step>  步长，不能为0，可选，未指定时取步长为1。
     ///                         如果步长为正值，表示正序生成；
     ///                         如果步长为负值，表示逆序生成。
@@ -45,21 +44,17 @@ pub(crate) enum Input {
     ///             例如：
     ///                 :gen 0          生成：0 1 2 3 4 5 ...
     ///                 :gen 0,10       生成：0 1 2 3 4 5 6 7 8 9
-    ///                 :gen 0,=10      生成：0 1 2 3 4 5 6 7 8 9 10
     ///                 :gen 0,10,2     生成：0 2 4 6 8
-    ///                 :gen 0,=10,2    生成：0 2 4 6 8 10
     ///                 :gen 0,,2       生成：0 2 4 6 8 10 12 14 ...
     ///                 :gen 10,0       无数据生成
     ///                 :gen 0,10,-1    生成：9 8 7 6 5 4 3 2 1
-    ///                 :gen 0,=10,-1   生成：10 9 8 7 6 5 4 3 2 1
-    ///                 :gen 0,=10,-3   生成：10 7 4 1
     ///                 :gen 0,10 n{v}  生成：n0 n1 n2 n3 n4 n5 n6 n7 n8 n9
     ///                 :gen 0,10 "Hex of {v} is {v:#04x}" 生成：
     ///                                 "Hex of 0 is 0x00"
     ///                                 "Hex of 1 is 0x01"
     ///                                 ...
-    Gen { start: Integer, end: Integer, included: bool, step: Integer, fmt: Option<String> },
-    /// :repeat     重复字面值作为整数类型输入。
+    Gen { start: Integer, end: Integer, step: Integer, fmt: Option<String> },
+    /// :repeat     重复字面值作为输入。
     ///             :repeat <value>[ <count>]
     ///                 <value> 需要重复的字面值，必选。
     ///                 <count> 需要重复的次数，必须为非负数，可选，未指定时重复无限次数。
@@ -79,8 +74,8 @@ impl Input {
     pub(crate) fn new_of(values: Vec<String>) -> Input {
         Input::Of { values }
     }
-    pub(crate) fn new_gen(start: Integer, end: Integer, included: bool, step: Integer, fmt: Option<String>) -> Input {
-        Input::Gen { start, end, included, step, fmt }
+    pub(crate) fn new_gen(start: Integer, end: Integer, step: Integer, fmt: Option<String>) -> Input {
+        Input::Gen { start, end, step, fmt }
     }
     pub(crate) fn new_repeat(value: String, count: Option<usize>) -> Input {
         Input::Repeat { value, count }
@@ -129,15 +124,17 @@ impl TryInto<Pipe> for Input {
             }),
             Input::Clip => match clipboard_win::get_clipboard_string() {
                 // TODO 2026-01-05 01:02 尝试leak text，然后使用Item::Str省略内存分配
-                Ok(text) => Ok(Pipe { iter: Box::new(text.lines().map(|s| s.to_string()).collect::<Vec<_>>().into_iter()) }),
+                Ok(text) => {
+                    Ok(Pipe { iter: Box::new(text.lines().map(|s| s.to_string()).collect::<Vec<_>>().into_iter()) })
+                }
                 Err(err) => Err(RpErr::ReadClipboardTextErr(err.to_string())),
             },
             Input::Of { values } => Ok(Pipe { iter: Box::new(values.into_iter()) }),
             // TODO 2025-12-28 21:59 如果gen没有指定end，设定为Unbounded。
-            Input::Gen { start, end, included, step, fmt } => {
+            Input::Gen { start, end, step, fmt } => {
                 if let Some(fmt) = fmt {
                     Ok(Pipe {
-                        iter: Box::new(range_to_iter(start, end, included, step).map(move |x| {
+                        iter: Box::new(range_to_iter(start, end, step).map(move |x| {
                             match fmt_args(&fmt, &[("v", FmtArg::from(x))]) {
                                 Ok(string) => string,
                                 Err(err) => err.termination(),
@@ -145,7 +142,7 @@ impl TryInto<Pipe> for Input {
                         })),
                     })
                 } else {
-                    Ok(Pipe { iter: Box::new(range_to_iter(start, end, included, step)) })
+                    Ok(Pipe { iter: Box::new(range_to_iter(start, end, step).map(|s| s.to_string())) })
                 }
             }
             Input::Repeat { value, count } => Ok(if count.is_none() {
@@ -157,29 +154,15 @@ impl TryInto<Pipe> for Input {
     }
 }
 
-fn range_to_iter(
-    start: Integer, end: Integer, included: bool, step: Integer,
-) -> Box<dyn DoubleEndedIterator<Item = String>> {
-    let iter = RangeIter {
-        start,
-        end,
-        included,
-        step: Integer::abs(step),
-        next: start,
-        next_back: if included { end } else { end - 1 },
-    };
-    if step < 0 {
-        Box::new(iter.rev().map(|v| Integer::to_string(&v)))
-    } else {
-        Box::new(iter.map(|v| Integer::to_string(&v)))
-    }
+fn range_to_iter(start: Integer, end: Integer, step: Integer) -> Box<dyn DoubleEndedIterator<Item = Integer>> {
+    let iter = RangeIter { start, end, step: Integer::abs(step), next: start, next_back: end };
+    if step < 0 { Box::new(iter.rev()) } else { Box::new(iter) }
 }
 
 #[derive(Debug, Eq, PartialEq)]
 struct RangeIter {
     start: Integer,
     end: Integer,
-    included: bool,
     step: Integer,
     next: Integer,
     next_back: Integer,
@@ -189,10 +172,7 @@ impl Iterator for RangeIter {
     type Item = Integer;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.next >= self.start
-            && (self.included && self.next <= self.end || !self.included && self.next < self.end)
-            && self.next <= self.next_back
-        {
+        if self.next >= self.start && self.next <= self.end && self.next <= self.next_back {
             let res = Some(self.next);
             self.next += self.step;
             res
@@ -204,10 +184,7 @@ impl Iterator for RangeIter {
 
 impl DoubleEndedIterator for RangeIter {
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.next_back >= self.start
-            && (self.included && self.next_back <= self.end || !self.included && self.next_back < self.end)
-            && self.next_back >= self.next
-        {
+        if self.next_back >= self.start && self.next_back <= self.end && self.next_back >= self.next {
             let res = Some(self.next_back);
             self.next_back -= self.step;
             res
@@ -223,114 +200,38 @@ mod iter_tests {
 
     #[test]
     fn test_range_to_iter_positive() {
-        assert_eq!(
-            range_to_iter(0, 10, false, 1).collect::<Vec<_>>(),
-            (0..10).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(0, 10, true, 1).collect::<Vec<_>>(),
-            (0..=10).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(0, 10, false, 2).collect::<Vec<_>>(),
-            (0..10).step_by(2).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(0, 10, true, 2).collect::<Vec<_>>(),
-            (0..=10).step_by(2).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
+        assert_eq!(range_to_iter(0, 10, 1).collect::<Vec<_>>(), (0..=10).collect::<Vec<_>>());
+        assert_eq!(range_to_iter(0, 10, 2).collect::<Vec<_>>(), (0..=10).step_by(2).collect::<Vec<_>>());
     }
 
     #[test]
     fn test_range_to_iter_negative() {
-        assert_eq!(
-            range_to_iter(0, 10, false, -1).collect::<Vec<_>>(),
-            (0..10).rev().map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(0, 10, true, -1).collect::<Vec<_>>(),
-            (0..=10).rev().map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(0, 10, false, -2).collect::<Vec<_>>(),
-            (0..10).rev().step_by(2).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(0, 10, true, -2).collect::<Vec<_>>(),
-            (0..=10).rev().step_by(2).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
+        assert_eq!(range_to_iter(0, 10, -1).collect::<Vec<_>>(), (0..=10).rev().collect::<Vec<_>>());
+        assert_eq!(range_to_iter(0, 10, -2).collect::<Vec<_>>(), (0..=10).rev().step_by(2).collect::<Vec<_>>());
     }
 
     #[test]
     fn test_range_to_iter_empty() {
-        assert_eq!(
-            range_to_iter(0, 0, false, 1).collect::<Vec<_>>(),
-            (0..0).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(0, 0, true, 1).collect::<Vec<_>>(),
-            (0..=0).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(0, 0, false, 2).collect::<Vec<_>>(),
-            (0..0).step_by(2).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(0, 0, true, 2).collect::<Vec<_>>(),
-            (0..=0).step_by(2).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
+        assert_eq!(range_to_iter(0, 0, 1).collect::<Vec<_>>(), (0..=0).collect::<Vec<_>>());
+        assert_eq!(range_to_iter(0, 0, 2).collect::<Vec<_>>(), (0..=0).step_by(2).collect::<Vec<_>>());
     }
 
     #[test]
     fn test_range_to_iter_reverted_range_and_positive() {
-        assert_eq!(
-            range_to_iter(10, 0, false, 1).collect::<Vec<_>>(),
-            (10..0).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(10, 0, true, 1).collect::<Vec<_>>(),
-            (10..=0).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(10, 0, false, 2).collect::<Vec<_>>(),
-            (10..0).step_by(2).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(10, 0, true, 2).collect::<Vec<_>>(),
-            (10..=0).step_by(2).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
+        assert_eq!(range_to_iter(10, 0, 1).collect::<Vec<_>>(), (10..=0).collect::<Vec<_>>());
+        assert_eq!(range_to_iter(10, 0, 2).collect::<Vec<_>>(), (10..=0).step_by(2).collect::<Vec<_>>());
     }
 
     #[test]
     fn test_range_to_iter_reverted_range_and_negative() {
-        assert_eq!(
-            range_to_iter(10, 0, false, -1).collect::<Vec<_>>(),
-            (10..0).rev().map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(10, 0, true, -1).collect::<Vec<_>>(),
-            (10..=0).rev().map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(10, 0, false, -2).collect::<Vec<_>>(),
-            (10..0).rev().step_by(2).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(10, 0, true, -2).collect::<Vec<_>>(),
-            (10..=0).rev().step_by(2).map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
+        assert_eq!(range_to_iter(10, 0, -1).collect::<Vec<_>>(), (10..=0).rev().collect::<Vec<_>>());
+        assert_eq!(range_to_iter(10, 0, -2).collect::<Vec<_>>(), (10..=0).rev().step_by(2).collect::<Vec<_>>());
     }
 
     #[test]
     fn test_range_to_iter_zero_step() {
-        assert_eq!(range_to_iter(0, 0, false, 0).next().is_none(), true);
-        assert_eq!(
-            range_to_iter(0, 1, false, 0).take(10).collect::<Vec<_>>(),
-            vec![0; 10].into_iter().map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            range_to_iter(0, 1, false, 0).take(100).collect::<Vec<_>>(),
-            vec![0; 100].into_iter().map(|v| Integer::to_string(&v)).collect::<Vec<_>>()
-        );
+        assert_eq!(Some(0), range_to_iter(0, 0, 0).next());
+        assert_eq!(range_to_iter(0, 1, 0).take(10).collect::<Vec<_>>(), vec![0; 10].into_iter().collect::<Vec<_>>());
+        assert_eq!(range_to_iter(0, 1, 0).take(100).collect::<Vec<_>>(), vec![0; 100].into_iter().collect::<Vec<_>>());
     }
 }

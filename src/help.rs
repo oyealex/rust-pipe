@@ -1,3 +1,4 @@
+use crate::condition::Cond;
 use crate::config::Config;
 use crate::err::RpErr;
 use crate::input::Input;
@@ -14,11 +15,12 @@ pub(crate) fn print_help(topic: Option<String>) {
             print_general_help();
             let topic = topic.to_ascii_lowercase();
             match topic.as_str() {
-                "options" => print_options_help(),
-                "input" => print_input_help(),
+                "opt" | "options" => print_options_help(),
+                "in" | "input" => print_input_help(),
                 "op" => print_op_help(),
-                "output" => print_output_help(),
+                "out" | "output" => print_output_help(),
                 "fmt" => print_fmt_help(),
+                "cond" | "condition" => print_condition_help(),
                 "code" => print_code_help(),
                 _ => (),
             }
@@ -34,12 +36,13 @@ fn print_all_help() {
     print_op_help();
     print_output_help();
     print_fmt_help();
+    print_condition_help();
     print_code_help();
 }
 
 fn print_general_help() {
     print_version();
-    println!("\nrp [<options>] [<input_cmd>] [<op_cmd>] [...] [<output_cmd>]");
+    println!("\nrp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>] [...] [<output_cmd>]");
 }
 
 fn print_options_help() {
@@ -71,7 +74,14 @@ fn print_output_help() {
 }
 
 fn print_fmt_help() {
-    println!("\n格式化：（TODO）");
+    println!("\n格式化：（TODO）"); // TODO 2026-01-11 23:42
+}
+
+fn print_condition_help() {
+    println!("\n条件表达式：");
+    for (_, help) in Cond::all_help() {
+        println!("{}", help);
+    }
 }
 
 fn print_code_help() {
