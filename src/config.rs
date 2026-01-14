@@ -58,15 +58,15 @@ pub(crate) fn parse_eval_token(args: &mut Peekable<Skip<Args>>) -> Result<(Input
         match parse::token::parse_without_configs(&token.trim_start()) {
             Ok((remaining, res)) => {
                 if !remaining.is_empty() {
-                    Err(RpErr::UnexpectedRemaining { cmd: "--token", arg: "token", remaining: remaining.to_owned() })?
+                    Err(RpErr::UnexpectedRemaining { cmd: "--token", arg: "<token>", remaining: remaining.to_owned() })?
                 }
                 Ok(res)
             }
             Err(err) => {
-                Err(RpErr::ArgParseErr { cmd: "--token", arg: "token", arg_value: token, error: err.to_string() })?
+                Err(RpErr::ArgParseErr { cmd: "--token", arg: "<token>", arg_value: token, error: err.to_string() })?
             }
         }
     } else {
-        Err(RpErr::MissingArg { cmd: "--token", arg: "token" })?
+        Err(RpErr::MissingArg { cmd: "--token", arg: "<token>" })?
     }
 }

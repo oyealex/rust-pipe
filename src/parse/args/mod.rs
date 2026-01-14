@@ -12,6 +12,7 @@ mod config;
 mod input;
 mod op;
 mod output;
+mod condition;
 
 pub use config::parse_configs;
 

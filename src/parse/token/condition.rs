@@ -1,7 +1,5 @@
 use crate::condition::{Cond, CondRangeArg, CondSpecArg};
-use crate::parse::token::{
-    arg, parse_2_choice, parse_num, ParserError,
-};
+use crate::parse::token::{arg, parse_2_choice, parse_num, ParserError};
 use nom::branch::alt;
 use nom::bytes::complete::tag_no_case;
 use nom::character::complete::{char, space1, usize};
@@ -10,37 +8,36 @@ use nom::error::context;
 use nom::sequence::{preceded, terminated};
 use nom::{IResult, Parser};
 
-pub(in crate::parse) fn parse_whole_cond(input: &str) -> IResult<&str, Cond, ParserError<'_>> {
-    terminated(parse_cond, eof).parse(input)
-}
-
 pub(in crate::parse) fn parse_cond(input: &str) -> IResult<&str, Cond, ParserError<'_>> {
     terminated(
         alt((
             context(
                 "Cond::TextLenRange",
-                preceded(tag_no_case("len"), map(parse_cond_range(usize), |arg| Cond::TextLenRange(arg))),
+                preceded((tag_no_case("len"), space1), map(parse_cond_range(usize), |arg| Cond::TextLenRange(arg))),
             ),
             context(
                 "Cond::TextLenSpec",
-                preceded(tag_no_case("len"), map(parse_cond_spec(usize), |arg| Cond::TextLenSpec(arg))),
+                preceded((tag_no_case("len"), space1), map(parse_cond_spec(usize), |arg| Cond::TextLenSpec(arg))),
             ),
             context(
                 "Cond::NumRange",
-                preceded(tag_no_case("num"), map(parse_cond_range(parse_num), |arg| Cond::NumRange(arg))),
+                preceded((tag_no_case("num"), space1), map(parse_cond_range(parse_num), |arg| Cond::NumRange(arg))),
             ),
             context(
                 "Cond::NumSpec",
-                preceded(tag_no_case("num"), map(parse_cond_spec(parse_num), |arg| Cond::NumSpec(arg))),
+                preceded((tag_no_case("num"), space1), map(parse_cond_spec(parse_num), |arg| Cond::NumSpec(arg))),
             ),
-            preceded(tag_no_case("num"), parse_cond_number),
+            preceded(tag_no_case("num"), alt((
+                preceded(space1, parse_cond_number),
+                success(Cond::new_number(None, false))
+                )) ),
             parse_cond_text_all_case,
             parse_cond_text_empty_or_blank,
             preceded((tag_no_case("reg"), space1), parse_cond_reg_match),
         )),
         context("Cond::ending_space1", space1),
     )
-        .parse(input)
+    .parse(input)
 }
 
 pub(in crate::parse) fn parse_cond_range<'a, T, F>(
@@ -52,17 +49,14 @@ where
     context(
         "CondRangeArg",
         map(
-            preceded(
-                space1,
-                verify(
-                    (
-                        context("CondRangeArg::[!]", opt(char('!'))),
-                        context("CondRangeArg::[<min>]", opt(range_arg.clone())),
-                        char(','),
-                        context("CondRangeArg::[<max>]", terminated(opt(range_arg), peek(alt((space1, eof))))),
-                    ),
-                    |(_, min, _, max)| min.is_some() || max.is_some(),
+            verify(
+                (
+                    context("CondRangeArg::[!]", opt(char('!'))),
+                    context("CondRangeArg::[<min>]", opt(range_arg.clone())),
+                    char(','),
+                    context("CondRangeArg::[<max>]", terminated(opt(range_arg), peek(alt((space1, eof))))),
                 ),
+                |(_, min, _, max)| min.is_some() || max.is_some(),
             ),
             |(not, min, _, max)| CondRangeArg::new(min, max, not.is_some()),
         ),
@@ -78,13 +72,10 @@ where
     context(
         "CondSpecArg",
         map(
-            preceded(
-                space1,
-                (
-                    context("CondSpecArg::[!]", opt(char('!'))),
-                    char('='),
-                    context("CondSpecArg::<spec>", terminated(spec_arg, peek(alt((space1, eof))))),
-                ),
+            (
+                context("CondSpecArg::[!]", opt(char('!'))),
+                char('='),
+                context("CondSpecArg::<spec>", terminated(spec_arg, peek(alt((space1, eof))))),
             ),
             |(not, _, spec)| CondSpecArg::new(spec, not.is_some()),
         ),
@@ -97,36 +88,34 @@ pub(in crate::parse) fn parse_cond_number(input: &str) -> IResult<&str, Cond, Pa
         alt((
             map(
                 preceded(
-                    (space1, char('!')),
+                    char('!'),
                     opt(alt((value(true, tag_no_case("integer")), value(false, tag_no_case("float"))))),
                 ), // 必定有!
                 |num_type| Cond::new_number(num_type, true),
             ),
             map(
                 (
-                    space1,
                     opt(char('!')),
                     alt((value(true, tag_no_case("integer")), value(false, tag_no_case("float")))),
                 ), // 必定有integer|float
-                |(_, not, num_type)| Cond::new_number(Some(num_type), not.is_some()),
+                |(not, num_type)| Cond::new_number(Some(num_type), not.is_some()),
             ),
-            success(Cond::new_number(None, false)),
         )),
     )
-        .parse(input)
+    .parse(input)
 }
 
 pub(in crate::parse) fn parse_cond_text_all_case(input: &str) -> IResult<&str, Cond, ParserError<'_>> {
-    context("Cond::TextAllCase", map(parse_2_choice("upper", "lower"), |is_upper| Cond::new_text_all_case(is_upper)))
+    context("Cond::TextAllCase", map(parse_2_choice("upper", "lower"), |is_upper| Cond::TextAllCase(is_upper)))
         .parse(input)
 }
 
 pub(in crate::parse) fn parse_cond_text_empty_or_blank(input: &str) -> IResult<&str, Cond, ParserError<'_>> {
     context(
         "Cond::TextEmptyOrBlank",
-        map(parse_2_choice("empty", "blank"), |is_upper| Cond::new_text_empty_or_blank(is_upper)),
+        map(parse_2_choice("empty", "blank"), |is_empty| Cond::TextEmptyOrBlank(is_empty)),
     )
-        .parse(input)
+    .parse(input)
 }
 pub(in crate::parse) fn parse_cond_reg_match(input: &str) -> IResult<&str, Cond, ParserError<'_>> {
     context(
@@ -136,13 +125,13 @@ pub(in crate::parse) fn parse_cond_reg_match(input: &str) -> IResult<&str, Cond,
             Err(rp_err) => rp_err.termination(),
         }),
     )
-        .parse(input)
+    .parse(input)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::Num;
     use super::*;
+    use crate::Num;
 
     #[test]
     fn test_parse_cond_text_len_range() {
@@ -224,15 +213,15 @@ mod tests {
 
     #[test]
     fn test_parse_cond_text_all_case() {
-        assert_eq!(parse_cond("upper "), Ok(("", Cond::new_text_all_case(true))));
-        assert_eq!(parse_cond("lower "), Ok(("", Cond::new_text_all_case(false))));
+        assert_eq!(parse_cond("upper "), Ok(("", Cond::TextAllCase(true))));
+        assert_eq!(parse_cond("lower "), Ok(("", Cond::TextAllCase(false))));
         assert!(parse_cond(" ").is_err());
     }
 
     #[test]
     fn test_parse_cond_text_empty_or_blank() {
-        assert_eq!(parse_cond("empty "), Ok(("", Cond::new_text_empty_or_blank(true))));
-        assert_eq!(parse_cond("blank "), Ok(("", Cond::new_text_empty_or_blank(false))));
+        assert_eq!(parse_cond("empty "), Ok(("", Cond::TextEmptyOrBlank(true))));
+        assert_eq!(parse_cond("blank "), Ok(("", Cond::TextEmptyOrBlank(false))));
         assert!(parse_cond(" ").is_err());
     }
 

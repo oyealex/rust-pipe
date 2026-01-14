@@ -117,12 +117,6 @@ impl Cond {
     pub(crate) fn new_number(is_integer: Option<bool>, not: bool) -> Cond {
         Cond::Number { is_integer, not }
     }
-    pub(crate) fn new_text_all_case(is_upper: bool) -> Cond {
-        Cond::TextAllCase(is_upper)
-    }
-    pub(crate) fn new_text_empty_or_blank(is_empty: bool) -> Cond {
-        Cond::TextEmptyOrBlank(is_empty)
-    }
     pub(crate) fn new_reg_match(regex: &str) -> Result<Cond, RpErr> {
         let reg = format!(r"\A(?:{})\z", regex);
         Regex::new(&reg)
@@ -429,29 +423,29 @@ mod tests {
     #[test]
     fn test_text_all_case() {
         // upper
-        assert!(!Cond::new_text_all_case(true).test("abc"));
-        assert!(Cond::new_text_all_case(true).test("ABC"));
-        assert!(!Cond::new_text_all_case(true).test("abcABC"));
-        assert!(Cond::new_text_all_case(true).test("你好123.#!@"));
+        assert!(!Cond::TextAllCase(true).test("abc"));
+        assert!(Cond::TextAllCase(true).test("ABC"));
+        assert!(!Cond::TextAllCase(true).test("abcABC"));
+        assert!(Cond::TextAllCase(true).test("你好123.#!@"));
         // lower
-        assert!(Cond::new_text_all_case(false).test("abc"));
-        assert!(!Cond::new_text_all_case(false).test("ABC"));
-        assert!(!Cond::new_text_all_case(false).test("abcABC"));
-        assert!(Cond::new_text_all_case(false).test("你好123.#!@"));
+        assert!(Cond::TextAllCase(false).test("abc"));
+        assert!(!Cond::TextAllCase(false).test("ABC"));
+        assert!(!Cond::TextAllCase(false).test("abcABC"));
+        assert!(Cond::TextAllCase(false).test("你好123.#!@"));
     }
 
     #[test]
     fn test_text_empty_or_blank() {
         // empty
-        assert!(Cond::new_text_empty_or_blank(true).test(""));
-        assert!(!Cond::new_text_empty_or_blank(true).test("abc"));
-        assert!(!Cond::new_text_empty_or_blank(true).test(" "));
-        assert!(!Cond::new_text_empty_or_blank(true).test(" \n\t\r "));
+        assert!(Cond::TextEmptyOrBlank(true).test(""));
+        assert!(!Cond::TextEmptyOrBlank(true).test("abc"));
+        assert!(!Cond::TextEmptyOrBlank(true).test(" "));
+        assert!(!Cond::TextEmptyOrBlank(true).test(" \n\t\r "));
         // blank
-        assert!(Cond::new_text_empty_or_blank(false).test(""));
-        assert!(!Cond::new_text_empty_or_blank(false).test("abc"));
-        assert!(Cond::new_text_empty_or_blank(false).test(" "));
-        assert!(Cond::new_text_empty_or_blank(false).test(" \n\t\r "));
+        assert!(Cond::TextEmptyOrBlank(false).test(""));
+        assert!(!Cond::TextEmptyOrBlank(false).test("abc"));
+        assert!(Cond::TextEmptyOrBlank(false).test(" "));
+        assert!(Cond::TextEmptyOrBlank(false).test(" \n\t\r "));
     }
 
     #[test]
