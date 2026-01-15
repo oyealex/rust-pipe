@@ -6,7 +6,7 @@ use crate::op::Op;
 use crate::output::Output;
 
 pub(crate) fn print_version() {
-    println!("rp (rust pipe) - v0.1.0");
+    println!("rp (rust pipe) - {} - {}", env!("CARGO_PKG_VERSION"), env!("BUILD_TIME"));
 }
 
 pub(crate) fn print_help(topic: Option<String>) {
@@ -42,7 +42,8 @@ fn print_all_help() {
 
 fn print_general_help() {
     print_version();
-    println!("\nrp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>] [...] [<output_cmd>]");
+    println!("\n{}", env!("CARGO_PKG_DESCRIPTION"));
+    println!("\nUsage: rp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>[ ...]] [<output_cmd>]");
 }
 
 fn print_options_help() {
