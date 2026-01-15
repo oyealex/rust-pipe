@@ -1,7 +1,6 @@
 use crate::err::RpErr;
 use crate::pipe::Pipe;
 use cmd_help::CmdHelp;
-use itertools::Itertools;
 use std::fs::OpenOptions;
 use std::io::Write;
 
@@ -72,6 +71,7 @@ impl Output {
             }
             #[cfg(windows)]
             Output::Clip { crlf } => {
+                use itertools::Itertools;
                 let text = pipe.map(String::from).join(if crlf.unwrap_or(false) { "\r\n" } else { "\n" });
                 clipboard_win::set_clipboard_string(&text).map_err(|err| RpErr::WriteToClipboardErr(err.to_string()))
             }

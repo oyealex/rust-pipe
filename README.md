@@ -12,15 +12,16 @@ Usage: rp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>[ ...]] [<output_c
 <options> 选项：
  -V,--version    打印版本信息。
  -h,--help       打印帮助信息。
-                 -h|-help[ opt|options|in|input|op|out|output|code|fmt|cond|condition]
-                     opt|options     打印选项帮助信息。
-                     in|input        打印数据输入命令帮助信息。
-                     op              打印数据操作命令帮助信息。
-                     out|output      打印数据输出命令帮助信息。
-                     code            打印退出码帮助信息。
-                     fmt             打印格式化帮助信息。
-                     cond|condition  打印条件表达式帮助信息。
-                     未指定则打印全部帮助信息。
+                 -h|-help[ <topic>]
+                     <topic>     帮助主题：
+                         opt|options     打印选项帮助信息。
+                         in|input        打印数据输入命令帮助信息。
+                         op              打印数据操作命令帮助信息。
+                         out|output      打印数据输出命令帮助信息。
+                         code            打印退出码帮助信息。
+                         fmt             打印格式化帮助信息。
+                         cond|condition  打印条件表达式帮助信息。
+                                 未指定则打印全部帮助信息。
  -v,--verbose    执行之前打印流水线详情。
  -d,--dry-run    仅解析流水线，不执行。
  -n,--nocase     全局忽略大小写。

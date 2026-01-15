@@ -4,7 +4,7 @@ use crate::parse::token::ParserError;
 use nom::branch::alt;
 use nom::bytes::complete::tag_no_case;
 use nom::character::complete::space1;
-use nom::combinator::{map, opt, success};
+use nom::combinator::{map, success};
 use nom::error::context;
 use nom::sequence::{preceded, terminated};
 use nom::IResult;
@@ -64,8 +64,8 @@ fn parse_to_clip(input: &str) -> OutputResult<'_> {
             preceded(
                 (tag_no_case(":to"), space1, tag_no_case("clip")), // 固定`:to clip`
                 terminated(
-                    opt(preceded(space1, alt((tag_no_case("lf"), tag_no_case("crlf"))))), // 换行符
-                    space1,                                                               // 结尾空格
+                    nom::combinator::opt(preceded(space1, alt((tag_no_case("lf"), tag_no_case("crlf"))))), // 换行符
+                    space1,                                                                                // 结尾空格
                 ),
             ), // 丢弃：`to clip `
             |postfix_opt: Option<&str>| Output::new_clip(postfix_opt.map(|s| s.eq_ignore_ascii_case("crlf"))),
