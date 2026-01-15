@@ -78,7 +78,7 @@ pub(crate) type PipeRes = Result<Pipe, RpErr>;
 pub fn run(mut args: Peekable<impl Iterator<Item = String>>) -> Result<(), RpErr> {
     let configs = parse::args::parse_configs(&mut args);
     if configs.contains(&Config::Help) {
-        help::print_help(args.next());
+        help::print_help(&mut args);
         return Ok(());
     } else if configs.contains(&Config::Version) {
         help::print_version();

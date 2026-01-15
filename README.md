@@ -3,9 +3,11 @@
 # Usage
 
 ```
-rp (rust pipe) - v0.1.0
+rp (rust pipe) - 0.2.0 - 2026-01-16 01:31:46
 
-rp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>] [...] [<output_cmd>]
+A command-line string processing tool implemented in Rust that supports streaming processing.
+
+Usage: rp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>[ ...]] [<output_cmd>]
 
 <options> 选项：
  -V,--version    打印版本信息。

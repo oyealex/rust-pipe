@@ -4,13 +4,14 @@ use crate::err::RpErr;
 use crate::input::Input;
 use crate::op::Op;
 use crate::output::Output;
+use std::iter::Peekable;
 
 pub(crate) fn print_version() {
     println!("rp (rust pipe) - {} - {}", env!("CARGO_PKG_VERSION"), env!("BUILD_TIME"));
 }
 
-pub(crate) fn print_help(topic: Option<String>) {
-    match topic {
+pub(crate) fn print_help(args: &mut Peekable<impl Iterator<Item = String>>) {
+    match args.next() {
         Some(topic) => {
             print_general_help();
             let topic = topic.to_ascii_lowercase();

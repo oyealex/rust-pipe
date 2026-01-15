@@ -22,7 +22,7 @@ fn parse_config(input: &str) -> IResult<&str, Config, ParserError<'_>> {
                 map(alt((tag("-V"), tag("--version"))), |_| Config::Version),
                 map(alt((tag("-v"), tag("--verbose"))), |_| Config::Verbose),
                 map(alt((tag("-d"), tag("--dry-run"))), |_| Config::DryRun),
-                map(alt((tag("--nocase"), tag("--nocase"))), |_| Config::Nocase),
+                map(alt((tag("-n"), tag("--nocase"))), |_| Config::Nocase),
             )),
             space1,
         ),
@@ -37,9 +37,14 @@ mod tests {
     #[test]
     fn test_parse_config() {
         assert_eq!(parse_config("-h "), Ok(("", Config::Help)));
+        assert_eq!(parse_config("--help "), Ok(("", Config::Help)));
         assert_eq!(parse_config("-V "), Ok(("", Config::Version)));
+        assert_eq!(parse_config("--version "), Ok(("", Config::Version)));
         assert_eq!(parse_config("-v "), Ok(("", Config::Verbose)));
+        assert_eq!(parse_config("--verbose "), Ok(("", Config::Verbose)));
         assert_eq!(parse_config("-d "), Ok(("", Config::DryRun)));
+        assert_eq!(parse_config("--dry-run "), Ok(("", Config::DryRun)));
+        assert_eq!(parse_config("-n "), Ok(("", Config::Nocase)));
         assert_eq!(parse_config("--nocase "), Ok(("", Config::Nocase)));
         assert!(parse_config("-h").is_err());
         assert!(parse_config("abc ").is_err());
