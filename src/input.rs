@@ -22,6 +22,7 @@ pub(crate) enum Input {
     ///                 :file input1.txt input2.txt input3.txt
     File { files: Vec<String> },
     /// :clip       从剪切板读取输入。
+    #[cfg(windows)]
     Clip,
     /// :of         使用直接字面值作为输入。
     ///             :of <text>[ <text][...]
@@ -68,6 +69,8 @@ impl Input {
     pub(crate) fn new_file(files: Vec<String>) -> Input {
         Input::File { files }
     }
+    
+    #[cfg(windows)]
     pub(crate) fn new_clip() -> Input {
         Input::Clip
     }
@@ -122,6 +125,7 @@ impl TryInto<Pipe> for Input {
                         }),
                 ),
             }),
+            #[cfg(windows)]
             Input::Clip => match clipboard_win::get_clipboard_string() {
                 // TODO 2026-01-05 01:02 尝试leak text，然后使用Item::Str省略内存分配
                 Ok(text) => {

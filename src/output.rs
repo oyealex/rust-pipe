@@ -30,6 +30,7 @@ pub(crate) enum Output {
     ///                 :to clip
     ///                 :to clip lf
     ///                 :to clip crlf
+    #[cfg(windows)]
     Clip { crlf: Option<bool> },
 }
 
@@ -40,6 +41,7 @@ impl Output {
     pub(crate) fn new_file(file: String, append: bool, crlf: Option<bool>) -> Self {
         Output::File { file, append, crlf }
     }
+    #[cfg(windows)]
     pub(crate) fn new_clip(crlf: Option<bool>) -> Self {
         Output::Clip { crlf }
     }
@@ -68,6 +70,7 @@ impl Output {
                     Err(err) => Err(RpErr::OpenFileErr { file, err: err.to_string() }),
                 }
             }
+            #[cfg(windows)]
             Output::Clip { crlf } => {
                 let text = pipe.map(String::from).join(if crlf.unwrap_or(false) { "\r\n" } else { "\n" });
                 clipboard_win::set_clipboard_string(&text).map_err(|err| RpErr::WriteToClipboardErr(err.to_string()))

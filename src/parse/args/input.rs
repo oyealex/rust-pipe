@@ -10,6 +10,7 @@ pub(in crate::parse::args) fn parse_input(args: &mut Peekable<impl Iterator<Item
             match lower_input.as_str() {
                 ":in" => parse_std_in(args),
                 ":file" => parse_file(args),
+                #[cfg(windows)]
                 ":clip" => parse_clip(args),
                 ":of" => parse_of(args),
                 ":gen" => parse_gen(args),
@@ -31,6 +32,7 @@ fn parse_file(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Input
     Ok(Input::new_file(parse_arg1(args, ":file", "file_name")?))
 }
 
+#[cfg(windows)]
 fn parse_clip(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Input, RpErr> {
     args.next(); // 消耗命令文本
     Ok(Input::new_clip())
@@ -109,6 +111,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn test_parse_clip() {
         let mut args = build_args(":clip");
         assert_eq!(Ok(Input::new_clip()), parse_input(&mut args));

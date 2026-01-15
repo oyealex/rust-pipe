@@ -14,6 +14,7 @@ pub(in crate::parse::args) fn parse_output(args: &mut Peekable<impl Iterator<Ite
                 let lower_output = output.to_ascii_lowercase();
                 match lower_output.as_str() {
                     "file" => parse_file(args),
+                    #[cfg(windows)]
                     "clip" => parse_clip(args),
                     "out" => parse_std_out(args),
                     _ => Ok(Output::new_std_out()),
@@ -35,6 +36,7 @@ fn parse_file(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Outpu
     }
 }
 
+#[cfg(windows)]
 fn parse_clip(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Output, RpErr> {
     args.next(); // 消耗`clip`
     let postfix = if let Some(crlf) = args.peek() {

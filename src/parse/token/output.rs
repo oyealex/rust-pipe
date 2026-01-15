@@ -18,6 +18,7 @@ pub(in crate::parse) fn parse_out(input: &str) -> OutputResult<'_> {
         alt((
             parse_to_std_out,
             parse_to_file,
+            #[cfg(windows)]
             parse_to_clip,
             context("Output::Out", map(success(()), |_| Output::new_std_out())), // 最后默认使用`Output::Out`
         )),
@@ -55,6 +56,7 @@ fn parse_to_file(input: &str) -> OutputResult<'_> {
     .parse(input)
 }
 
+#[cfg(windows)]
 fn parse_to_clip(input: &str) -> OutputResult<'_> {
     context(
         "Output::Clip",
@@ -101,6 +103,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn test_parse_to_clip() {
         assert_eq!(parse_to_clip(":to clip "), Ok(("", Output::new_clip(None))));
         assert_eq!(parse_to_clip(":to  clip  "), Ok(("", Output::new_clip(None))));

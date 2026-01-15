@@ -19,6 +19,7 @@ pub(in crate::parse) fn parse_input(input: &str) -> InputResult<'_> {
         alt((
             parse_std_in,
             parse_file,
+            #[cfg(windows)]
             parse_clip,
             parse_of,
             parse_gen,
@@ -41,6 +42,7 @@ fn parse_file(input: &str) -> InputResult<'_> {
     .parse(input)
 }
 
+#[cfg(windows)]
 fn parse_clip(input: &str) -> InputResult<'_> {
     context("Input::Clip", map((tag_no_case(":clip"), space1), |_| Input::new_clip())).parse(input)
 }
@@ -133,6 +135,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn test_parse_clip() {
         assert_eq!(parse_clip(":clip "), Ok(("", Input::new_clip())));
         assert!(parse_clip(":clip").is_err());
