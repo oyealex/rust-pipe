@@ -19,6 +19,7 @@ unicase = "2.9.0" # 忽略大小写
 rand = "0.9.2" # 随机数
 rt-format = "0.3.1" # 运行时字符串格式化
 regex = "1.12.2" # 正则
+#console = "0.16.2" # 彩色终端输出
 cmd-help = { path = "./cmd_help" } # doc生成帮助
 
 [target.'cfg(windows)'.dependencies]

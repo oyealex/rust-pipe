@@ -29,6 +29,8 @@ pub(crate) enum Config {
     DryRun,
     /// -n,--nocase     全局忽略大小写。
     Nocase,
+    /// -s,--skip-err 全局忽略错误。
+    SkipErr,
     /// -t,--token      以Token模式解析下一个参数。
     ///                 除了紧跟的第一个参数外，其他参数会被忽略。
     ///                 -t|--token <token>
@@ -41,6 +43,11 @@ pub(crate) enum Config {
 #[inline]
 pub(crate) fn is_nocase(nocase: bool, configs: &[Config]) -> bool {
     nocase || configs.contains(&Config::Nocase)
+}
+
+#[inline]
+pub(crate) fn skip_err(configs: &[Config]) -> bool {
+    configs.contains(&Config::SkipErr)
 }
 
 pub(crate) fn print_pipe_info(input: &Input, ops: &Vec<Op>, output: &Output) {

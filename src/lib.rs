@@ -14,6 +14,7 @@ pub(crate) mod op;
 mod output;
 mod parse;
 mod pipe;
+pub(crate) mod print;
 
 pub(crate) type Integer = i64;
 pub(crate) type Float = f64;
@@ -90,7 +91,7 @@ pub fn run(mut args: Peekable<impl Iterator<Item = String>>) -> Result<(), RpErr
         config::print_pipe_info(&input, &ops, &output);
     }
     let configs: &'static mut [Config] = configs.leak();
-    let mut pipe = input.try_into()?;
+    let mut pipe = input.try_into(configs)?;
     for op in ops {
         pipe = op.wrap(pipe, configs)?;
     }

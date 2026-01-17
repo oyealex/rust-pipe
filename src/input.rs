@@ -1,3 +1,4 @@
+use crate::config::{skip_err, Config};
 use crate::err::RpErr;
 use crate::fmt::{fmt_args, FmtArg};
 use crate::pipe::Pipe;
@@ -69,7 +70,7 @@ impl Input {
     pub(crate) fn new_file(files: Vec<String>) -> Input {
         Input::File { files }
     }
-    
+
     #[cfg(windows)]
     pub(crate) fn new_clip() -> Input {
         Input::Clip
@@ -85,10 +86,8 @@ impl Input {
     }
 }
 
-impl TryInto<Pipe> for Input {
-    type Error = RpErr;
-
-    fn try_into(self) -> PipeRes {
+impl Input {
+    pub(crate) fn try_into(self, configs: &'static [Config]) -> PipeRes {
         match self {
             Input::StdIn => Ok(Pipe {
                 iter: Box::new(
@@ -100,11 +99,12 @@ impl TryInto<Pipe> for Input {
                     files
                         .into_iter()
                         .map(|f| (File::open(&f), f))
-                        .map(|(r, f)| {
-                            match r {
-                                Ok(fin) => (fin, f),
-                                Err(err) => {
-                                    // TODO 2026-01-05 01:18 根据全局配置选择跳过
+                        .filter_map(|(r, f)| match r {
+                            Ok(fin) => Some((fin, f)),
+                            Err(err) => {
+                                if skip_err(configs) {
+                                    None
+                                } else {
                                     RpErr::OpenFileErr { file: f, err: err.to_string() }.termination();
                                 }
                             }
@@ -113,11 +113,12 @@ impl TryInto<Pipe> for Input {
                         .flat_map(|(reader, f)| {
                             BufRead::lines(reader).into_iter().enumerate().map(move |l| (l, f.clone()))
                         })
-                        .map(|((line, lr), f)| {
-                            match lr {
-                                Ok(line) => line,
-                                Err(err) => {
-                                    // TODO 2026-01-05 01:18 根据全局配置选择跳过
+                        .filter_map(|((line, lr), f)| match lr {
+                            Ok(line) => Some(line),
+                            Err(err) => {
+                                if skip_err(configs) {
+                                    None
+                                } else {
                                     RpErr::ReadFromFileErr { file: (*f).clone(), line_no: line, err: err.to_string() }
                                         .termination();
                                 }
