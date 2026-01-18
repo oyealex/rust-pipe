@@ -3,7 +3,7 @@
 # Usage
 
 ```
-rp (rust pipe) - 0.2.0 - 2026-01-16 01:31:46
+rp (rust pipe) - 0.3.0 - 2026-01-19 02:34:33
 
 A command-line string processing tool implemented in Rust that supports streaming processing.
 
@@ -25,6 +25,7 @@ Usage: rp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>[ ...]] [<output_c
  -v,--verbose    执行之前打印流水线详情。
  -d,--dry-run    仅解析流水线，不执行。
  -n,--nocase     全局忽略大小写。
+ -s,--skip-err 全局忽略错误。
  -t,--token      以Token模式解析下一个参数。
                  除了紧跟的第一个参数外，其他参数会被忽略。
                  -t|--token <token>
@@ -36,8 +37,8 @@ Usage: rp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>[ ...]] [<output_c
  :in         从标准输入读取输入。
              未指定元素输入时的默认输入。
  :file       从文件读取输入。
-             :file <file_name>[ <file_name>][...]
-                 <file_name> 文件路径，至少指定一个。
+             :file <file>[ <file>][...]
+                 <file>  文件路径，至少指定一个。
              例如：
                  :file input.txt
                  :file input1.txt input2.txt input3.txt
@@ -61,6 +62,7 @@ Usage: rp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>[ ...]] [<output_c
                          更多格式化信息参考`-h fmt`。
              例如：
                  :gen 0          生成：0 1 2 3 4 5 ...
+                 :gen 0,         生成：0 1 2 3 4 5 ...
                  :gen 0,10       生成：0 1 2 3 4 5 6 7 8 9
                  :gen 0,10,2     生成：0 2 4 6 8
                  :gen 0,,2       生成：0 2 4 6 8 10 12 14 ...
@@ -78,10 +80,10 @@ Usage: rp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>[ ...]] [<output_c
 
 <op_cmd> 数据操作命令：
  :peek       打印每个值到标准输出或文件。
-             :peek[ <file_name>][ append][ lf|crlf]
-                 <file_name> 文件路径，可选。
-                 append      追加输出而不是覆盖，可选，如果未指定则覆盖源文件。
-                 lf|crlf     指定换行符为'LF'或'CRLF'，可选，如果未指定则默认使用'LF'。
+             :peek[ <file>][ append][ lf|crlf]
+                 <file>  文件路径，可选。
+                 append  追加输出而不是覆盖，可选，如果未指定则覆盖源文件。
+                 lf|crlf 指定换行符为'LF'或'CRLF'，可选，如果未指定则默认使用'LF'。
              例如：
                  :peek
                  :peek file.txt
@@ -186,10 +188,10 @@ Usage: rp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>[ ...]] [<output_c
  :to out     输出到标准输出。
              未指定元素输出时的默认输出。
  :to file    输出到文件。
-             :to file <file_name>[ append][ lf|crlf]
-                 <file_name> 文件路径，必选。
-                 append      追加输出而不是覆盖，可选，如果未指定则覆盖源文件。
-                 lf|crlf     指定换行符为'LF'或'CRLF'，可选，如果未指定则默认使用'LF'。
+             :to file <file>[ append][ lf|crlf]
+                 <file>  文件路径，必选。
+                 append  追加输出而不是覆盖，可选，如果未指定则覆盖源文件。
+                 lf|crlf 指定换行符为'LF'或'CRLF'，可选，如果未指定则默认使用'LF'。
              例如：
                  :to file out.txt
                  :to file out.txt append
@@ -208,7 +210,7 @@ Usage: rp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>[ ...]] [<output_c
 格式化：（TODO）
 
 条件表达式：
- len [!][<min_len>],[<max_len>]
+ len [!][<min>],[<max>]
      按照字符串长度范围选择，范围表达式最小值和最大值至少指定其一，支持可选的否定。
      例如：
          len 2,
@@ -252,6 +254,7 @@ Usage: rp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>[ ...]] [<output_c
      选择没有任何字符或全部为空白字符的数据。
  reg <exp>
      选择匹配给定正则表达式的数据。
+     <exp>   正则表达式，必选。
      例如：
          reg '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
 
@@ -261,8 +264,8 @@ Usage: rp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>[ ...]] [<output_c
  3       解析操作Token失败。
  4       解析输出Token失败。
  5       参数解析失败。
- 6       参数内容无法完全解析，存在剩余无法解析的内容。
- 7       命令缺少参数。
+ 6       命令缺少参数。
+ 7       参数内容无法完全解析，存在剩余无法解析的内容。
  8       未知参数。
  9       从剪切板读取数据失败。
  10      从文件读取数据失败。
@@ -272,4 +275,5 @@ Usage: rp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>[ ...]] [<output_c
  14      格式化字符串失败。
  15      解析正则表达式失败。
  16      解析数值失败。
+ 17      无效的转义。
 ```
