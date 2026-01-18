@@ -67,6 +67,10 @@ pub enum RpErr {
     /// 16      解析数值失败。
     #[error("[ParseRegexErr:16] Parse number from {0:?} err")]
     ParseNumErr(String),
+
+    /// 17      无效的转义。
+    #[error("[InvalidEscape:17] Invalid escape \"{0}\"")]
+    InvalidEscape(String),
 }
 
 impl Termination for RpErr {
@@ -101,6 +105,7 @@ impl RpErr {
             RpErr::FormatStringErr { .. } => 14,
             RpErr::ParseRegexErr { .. } => 15,
             RpErr::ParseNumErr { .. } => 16,
+            RpErr::InvalidEscape(_) => 17,
         }
     }
 }

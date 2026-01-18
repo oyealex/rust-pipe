@@ -31,25 +31,34 @@ pub(in crate::parse) fn parse_input(input: &str) -> InputResult<'_> {
 }
 
 fn parse_std_in(input: &str) -> InputResult<'_> {
-    context("Input::StdIn", map((tag_no_case(":in"), space1), |_| Input::new_std_in())).parse(input)
+    context("Input::StdIn", map((tag_no_case(":in"), context("(trailing_space1)", space1)), |_| Input::new_std_in()))
+        .parse(input)
 }
 
 fn parse_file(input: &str) -> InputResult<'_> {
     context(
         "Input::File",
-        map(terminated(cmd_arg1(":file", "Input::File::<file_name>"), space1), |files| Input::new_file(files)),
+        map(terminated(cmd_arg1(":file", "<file>"), context("(trailing_space1)", space1)), |files| {
+            Input::new_file(files)
+        }),
     )
     .parse(input)
 }
 
 #[cfg(windows)]
 fn parse_clip(input: &str) -> InputResult<'_> {
-    context("Input::Clip", map((tag_no_case(":clip"), space1), |_| Input::new_clip())).parse(input)
+    context("Input::Clip", map((tag_no_case(":clip"), context("(trailing_space1)", space1)), |_| Input::new_clip()))
+        .parse(input)
 }
 
 fn parse_of(input: &str) -> InputResult<'_> {
-    context("Input::Of", map(terminated(cmd_arg1(":of", "Input::Of::<text>"), space1), |values| Input::new_of(values)))
-        .parse(input)
+    context(
+        "Input::Of",
+        map(terminated(cmd_arg1(":of", "<text>"), context("(trailing_space1)", space1)), |values| {
+            Input::new_of(values)
+        }),
+    )
+    .parse(input)
 }
 
 fn parse_gen(input: &str) -> InputResult<'_> {
@@ -60,11 +69,11 @@ fn parse_gen(input: &str) -> InputResult<'_> {
                 preceded(
                     tag_no_case(":gen"), // 命令
                     (
-                        context("Input::Gen::<range>", preceded(space1, parse_range_in_gen)), // 范围
-                        opt(preceded(space1, arg_exclude_cmd)),                               // 格式化字符串
+                        preceded(space1, parse_range_in_gen),                     // 范围
+                        opt(context("<fmt>", preceded(space1, arg_exclude_cmd))), // 格式化字符串
                     ),
                 ),
-                space1, // 结尾空白
+                context("(trailing_space1)", space1),
             ),
             |((start, end, step), fmt)| Input::new_gen(start, end, step, fmt),
         ),
@@ -74,16 +83,23 @@ fn parse_gen(input: &str) -> InputResult<'_> {
 
 pub(in crate::parse) fn parse_range_in_gen(input: &str) -> IResult<&str, (Integer, Integer, Integer), ParserError<'_>> {
     map(
-        alt((
-            // OPT 2025-12-28 23:16 使用opt重构？
-            (parse_integer, char(','), parse_integer, char(','), verify(parse_integer, |s| *s != 0)), // 0,=10,2
-            (parse_integer, char(','), parse_integer, char(','), verify(parse_integer, |s| *s != 0)), // 0,10,2
-            (parse_integer, char(','), parse_integer, success(','), success(1)),                      // 0,=10
-            (parse_integer, char(','), parse_integer, success(','), success(1)),                      // 0,10
-            (parse_integer, char(','), success(Integer::MAX), char(','), verify(parse_integer, |s| *s != 0)), // 0,,2
-            (parse_integer, success(','), success(Integer::MAX), success(','), success(1)),           // 0
-        )),
-        |(start, _, end, _, step)| (start, end, step),
+        (
+            context("<start>", parse_integer), // 必选起始值
+            opt(preceded(
+                char(','), // 结束值分隔符
+                (
+                    opt(context("<end>", parse_integer)), //可选结束值
+                    opt(preceded(char(','), verify(context("<step>", parse_integer), |s| *s != 0))), // 可选步长
+                ),
+            )),
+        ),
+        |(start, end_and_step_opt)| {
+            if let Some((end_opt, step_opt)) = end_and_step_opt {
+                (start, end_opt.unwrap_or(Integer::MAX), step_opt.unwrap_or(1))
+            } else {
+                (start, Integer::MAX, 1)
+            }
+        },
     )
     .parse(input)
 }
@@ -162,12 +178,14 @@ mod tests {
     #[test]
     fn test_parse_gen() {
         assert_eq!(parse_gen(":gen 0          "), Ok(("", Input::new_gen(0, Integer::MAX, 1, None))));
+        assert_eq!(parse_gen(":gen 0,         "), Ok(("", Input::new_gen(0, Integer::MAX, 1, None))));
         assert_eq!(parse_gen(":gen 0,10       "), Ok(("", Input::new_gen(0, 10, 1, None))));
         assert_eq!(parse_gen(":gen 0,10,2     "), Ok(("", Input::new_gen(0, 10, 2, None))));
         assert_eq!(parse_gen(":gen 0,,2       "), Ok(("", Input::new_gen(0, Integer::MAX, 2, None))));
         assert_eq!(parse_gen(":gen 10,0       "), Ok(("", Input::new_gen(10, 0, 1, None))));
         assert_eq!(parse_gen(":gen 0,10,-1    "), Ok(("", Input::new_gen(0, 10, -1, None))));
         assert_eq!(parse_gen(":gen 0,10 n{v}  "), Ok(("", Input::new_gen(0, 10, 1, Some("n{v}".to_string())))));
+        assert!(parse_gen(":gen 0,10,0     ").is_err());
     }
 
     #[test]

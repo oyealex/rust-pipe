@@ -16,8 +16,8 @@ pub(crate) enum Input {
     ///             未指定元素输入时的默认输入。
     StdIn,
     /// :file       从文件读取输入。
-    ///             :file <file_name>[ <file_name>][...]
-    ///                 <file_name> 文件路径，至少指定一个。
+    ///             :file <file>[ <file>][...]
+    ///                 <file>  文件路径，至少指定一个。
     ///             例如：
     ///                 :file input.txt
     ///                 :file input1.txt input2.txt input3.txt
@@ -27,7 +27,7 @@ pub(crate) enum Input {
     Clip,
     /// :of         使用直接字面值作为输入。
     ///             :of <text>[ <text][...]
-    ///                 <text>  字面值，至少指定一个，如果以':'开头，需要使用'::'转义。
+    ///                 <text>  字面值，至少指定一个，如果以':'开头，需要使用'\:'转义。
     ///             例如：
     ///                 :of line
     ///                 :of line1 "line 2" 'line 3'
@@ -45,6 +45,7 @@ pub(crate) enum Input {
     ///                         更多格式化信息参考`-h fmt`。
     ///             例如：
     ///                 :gen 0          生成：0 1 2 3 4 5 ...
+    ///                 :gen 0,         生成：0 1 2 3 4 5 ...
     ///                 :gen 0,10       生成：0 1 2 3 4 5 6 7 8 9
     ///                 :gen 0,10,2     生成：0 2 4 6 8
     ///                 :gen 0,,2       生成：0 2 4 6 8 10 12 14 ...

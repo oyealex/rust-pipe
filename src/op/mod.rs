@@ -23,10 +23,10 @@ use unicase::UniCase;
 pub(crate) enum Op {
     /* **************************************** 访问 **************************************** */
     /// :peek       打印每个值到标准输出或文件。
-    ///             :peek[ <file_name>][ append][ lf|crlf]
-    ///                 <file_name> 文件路径，可选。
-    ///                 append      追加输出而不是覆盖，可选，如果未指定则覆盖源文件。
-    ///                 lf|crlf     指定换行符为'LF'或'CRLF'，可选，如果未指定则默认使用'LF'。
+    ///             :peek[ <file>][ append][ lf|crlf]
+    ///                 <file>  文件路径，可选。
+    ///                 append  追加输出而不是覆盖，可选，如果未指定则覆盖源文件。
+    ///                 lf|crlf 指定换行符为'LF'或'CRLF'，可选，如果未指定则默认使用'LF'。
     ///             例如：
     ///                 :peek
     ///                 :peek file.txt

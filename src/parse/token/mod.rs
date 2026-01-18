@@ -19,7 +19,7 @@ use nom::character::complete::{none_of, space1};
 use nom::combinator::{eof, map, map_res, opt, peek, recognize, value, verify};
 use nom::error::context;
 use nom::multi::{fold_many1, many_till};
-use nom::sequence::{delimited, preceded, terminated};
+use nom::sequence::{delimited, preceded};
 use nom::{ExtendInto, IResult, Parser};
 use nom_language::error::VerboseError;
 use std::borrow::Cow;
@@ -68,26 +68,26 @@ fn general_file_info<'a>(
     optional: bool,
 ) -> impl Parser<&'a str, Output = (String, Option<&'a str>, Option<&'a str>), Error = ParserError<'a>> {
     (
-        if optional { arg_exclude_cmd } else { arg },                         // 文件
-        opt(preceded(space1, tag_no_case("append"))),                         // 是否追加
+        context("<file>", if optional { arg_exclude_cmd } else { arg }), // 文件
+        opt(preceded(space1, tag_no_case("append"))),                    // 是否追加
         opt(preceded(space1, alt((tag_no_case("lf"), tag_no_case("crlf"))))), // 换行符
     )
 }
-/// 构造一个解析器，支持解析`cmd arg0 [arg1 ][arg2 ][...]`，解析至少一个参数直到遇到下一个冒号命令，
-/// 如果参数以冒号开头需要使用`::`代替开头的`:`。
+/// 构造一个解析器，解析`cmd arg [arg ][arg ][...]`，即解析至少一个参数直到遇到下一个冒号命令，
+/// 如果参数以冒号开头需要使用`\:`代替开头的`:`。
 fn cmd_arg1<'a>(
-    cmd: &'a str, arg_name: &'static str,
+    cmd_name: &'a str, arg_name: &'static str,
 ) -> impl Parser<&'a str, Output = Vec<String>, Error = ParserError<'a>> {
     preceded(
         // 丢弃：命令标记
-        tag_no_case(cmd),
+        tag_no_case(cmd_name),
         map(
             context(
                 arg_name,
                 verify(
                     many_till(
-                        preceded(space1, arg_exclude_cmd),               // 空格、参数
-                        peek(alt(((space1, cmd_token), (space1, eof)))), // 直到下一个命令，但不消耗此命令，或达到结尾，忽略结果
+                        preceded(space1, arg_exclude_cmd), // 空格、参数
+                        peek((space1, alt((cmd, eof)))),   // 直到下一个命令，但不消耗此命令，或达到结尾，忽略结果
                     ),
                     |(args, _)| !args.is_empty(), // 验证：参数非空
                 ),
@@ -99,22 +99,26 @@ fn cmd_arg1<'a>(
 
 fn arg_exclude_cmd(input: &str) -> IResult<&str, String, ParserError<'_>> {
     context(
-        "arg_non_cmd",
+        "arg_exclude_cmd",
         map(verify(arg, |s: &String| whole_cmd_token(s).is_err()), |s| {
-            if let Some(stripped) = s.strip_prefix("::") { format!(":{}", stripped) } else { s.to_owned() }
+            if let Some(stripped) = s.strip_prefix("\\:") { format!(":{}", stripped) } else { s.to_owned() }
         }),
     )
     .parse(input)
 }
 
-fn cmd_token(input: &str) -> IResult<&str, &str, ParserError<'_>> {
+fn cmd(input: &str) -> IResult<&str, &str, ParserError<'_>> {
     recognize((char(':'), take_while1(|c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')))
         .parse(input)
 }
 
+fn arg_end(input: &str) -> IResult<&str, &str, ParserError<'_>> {
+    peek(alt((space1, eof))).parse(input)
+}
+
 /// 判断是否整个token为命令格式。
 pub(in crate::parse) fn whole_cmd_token(input: &str) -> IResult<&str, &str, ParserError<'_>> {
-    recognize((cmd_token, eof)).parse(input)
+    recognize((cmd, eof)).parse(input)
 }
 
 pub(in crate::parse) fn parse_arg_as<T>(input: &str) -> IResult<&str, T, ParserError<'_>>
@@ -154,38 +158,47 @@ pub(in crate::parse) fn arg(input: &str) -> IResult<&str, String, ParserError<'_
 }
 
 fn normal_part(input: &str) -> IResult<&str, String, ParserError<'_>> {
-    verify(
-        escaped_trans(
-            // 首先持续匹配直到遇到转义字符，
-            //    这里要考虑引号空格等可能导致解析中断的字符
-            //    转义字符在后续处理，不能直接捕获，所以也需要排除
-            none_of(r#"\ "'"#),
-            '\\',          // 定义转义字符前缀字符
-            normal_escape, // 转换转义字符，然后继续使用第一个普通解析器继续解析
+    context(
+        "arg_normal_part",
+        verify(
+            escaped_trans(
+                // 首先持续匹配直到遇到转义字符，
+                //    这里要考虑引号空格等可能导致解析中断的字符
+                //    转义字符在后续处理，不能直接捕获，所以也需要排除
+                none_of(r#"\ "'"#),
+                '\\',          // 定义转义字符前缀字符
+                normal_escape, // 转换转义字符，然后继续使用第一个普通解析器继续解析
+            ),
+            |s: &String| !s.is_empty(), // 确保escaped_transform不会返回空字符串，导致外层fold_many1直接失败
         ),
-        |s: &String| !s.is_empty(), // 确保escaped_transform不会返回空字符串，导致外层fold_many1直接失败
     )
     .parse(input)
 }
 
 fn double_quota_part(input: &str) -> IResult<&str, String, ParserError<'_>> {
-    map(
-        delimited(
-            char('"'), // 左双引号
-            // 双引号内部允许转义，使用opt避免escaped_transform在遇到`""`时解析失败
-            opt(escaped_trans(none_of(r#"\""#), '\\', normal_escape)),
-            char('"'), // 右双引号
+    context(
+        "arg_double_quota_part",
+        map(
+            delimited(
+                char('"'), // 左双引号
+                // 双引号内部允许转义，使用opt避免escaped_transform在遇到`""`时解析失败
+                opt(escaped_trans(none_of(r#"\""#), '\\', normal_escape)),
+                char('"'), // 右双引号
+            ),
+            |s| s.unwrap_or_default(),
         ),
-        |s| s.unwrap_or_default(),
     )
     .parse(input)
 }
 
 fn single_quota_part(input: &str) -> IResult<&str, &str, ParserError<'_>> {
-    delimited(
-        char('\''),                // 左单引号
-        take_while(|c| c != '\''), // 中间可以是任意字符，除了单引号
-        char('\''),                // 右单引号
+    context(
+        "arg_single_quota_part",
+        delimited(
+            char('\''),                // 左单引号
+            take_while(|c| c != '\''), // 中间可以是任意字符，除了单引号
+            char('\''),                // 右单引号
+        ),
     )
     .parse(input)
 }
@@ -193,8 +206,10 @@ fn single_quota_part(input: &str) -> IResult<&str, &str, ParserError<'_>> {
 fn normal_escape(c: char) -> Option<&'static str> {
     match c {
         '\\' => Some("\\"),
+        '0' => Some("\0"),
         ' ' => Some(" "),
         '"' => Some("\""),
+        '\'' => Some("\'"),
         'r' => Some("\r"),
         'n' => Some("\n"),
         't' => Some("\t"),
@@ -202,12 +217,8 @@ fn normal_escape(c: char) -> Option<&'static str> {
     }
 }
 
-pub(in crate::parse) fn escape_string(input: &str) -> String {
-    // 预期不应该失败
-    terminated(escaped_trans(none_of("\\"), '\\', normal_escape), eof)
-        .parse(input)
-        .expect("escape_string should not fail")
-        .1
+pub(in crate::parse) fn escape(input: &str) -> IResult<&str, String, ParserError<'_>> {
+    escaped_trans(none_of("\\"), '\\', normal_escape).parse(input)
 }
 
 /// `nom::bytes::complete::escaped_transform`的优化版本，escaped_transform处理不在转义范围内的反斜杠字符时如果需要
@@ -273,8 +284,8 @@ mod tests {
         assert_eq!(arg_exclude_cmd("arg"), Ok(("", "arg".to_string())));
         assert_eq!(arg_exclude_cmd("arg1 arg2"), Ok((" arg2", "arg1".to_string())));
         assert!(arg_exclude_cmd(":arg1 arg2").is_err());
-        assert_eq!(arg_exclude_cmd("::arg1 arg2"), Ok((" arg2", ":arg1".to_string())));
-        assert_eq!(arg_exclude_cmd("'::arg1 arg2'"), Ok(("", ":arg1 arg2".to_string())));
+        assert_eq!(arg_exclude_cmd("\\:arg1 arg2"), Ok((" arg2", ":arg1".to_string())));
+        assert_eq!(arg_exclude_cmd("'\\:arg1 arg2'"), Ok(("", ":arg1 arg2".to_string())));
         assert_eq!(arg_exclude_cmd("'arg a' :cmd"), Ok((" :cmd", "arg a".to_string())));
     }
 
@@ -287,17 +298,17 @@ mod tests {
             Ok((" :cmd1", vec!["arg1".to_string(), "arg2".to_string()]))
         );
         assert_eq!(
-            cmd_arg1(":cmd", "arg").parse(":cmd ::arg1 :::arg2 ::::arg3 :cmd4"),
+            cmd_arg1(":cmd", "arg").parse(":cmd \\:arg1 \\::arg2 \\:::arg3 :cmd4"),
             Ok((" :cmd4", vec![":arg1".to_string(), "::arg2".to_string(), ":::arg3".to_string()]))
         );
     }
 
     #[test]
     fn test_escape_string() {
-        assert_eq!(escape_string(""), "");
-        assert_eq!(escape_string("''"), "''");
-        assert_eq!(escape_string("abc"), "abc");
-        assert_eq!(escape_string("\\n abc"), "\n abc");
-        assert_eq!(escape_string("\\m abc"), "\\m abc");
+        assert_eq!(escape(""), Ok(("", "".to_owned())));
+        assert_eq!(escape("''"), Ok(("", "''".to_owned())));
+        assert_eq!(escape("abc"), Ok(("", "abc".to_owned())));
+        assert_eq!(escape("\\n abc"), Ok(("", "\n abc".to_owned())));
+        assert_eq!(escape("\\m abc"), Ok(("", "\\m abc".to_owned())));
     }
 }

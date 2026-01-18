@@ -270,7 +270,7 @@ mod tests {
         assert_eq!(vec![":abc"], args.collect::<Vec<_>>());
         assert_eq!(
             Ok(Some(Op::Trim(TrimArg::new(TrimMode::All, Some(":abc".to_string()), false, false)))),
-            parse_op(&mut build_args(":trim ::abc"))
+            parse_op(&mut build_args(":trim \\:abc"))
         );
         // ltrim
         assert_eq!(
@@ -290,7 +290,7 @@ mod tests {
         assert_eq!(vec![":abc"], args.collect::<Vec<_>>());
         assert_eq!(
             Ok(Some(Op::Trim(TrimArg::new(TrimMode::Left, Some(":abc".to_string()), false, false)))),
-            parse_op(&mut build_args(":ltrim ::abc"))
+            parse_op(&mut build_args(":ltrim \\:abc"))
         );
         // rtrim
         assert_eq!(
@@ -310,7 +310,7 @@ mod tests {
         assert_eq!(vec![":abc"], args.collect::<Vec<_>>());
         assert_eq!(
             Ok(Some(Op::Trim(TrimArg::new(TrimMode::Right, Some(":abc".to_string()), false, false)))),
-            parse_op(&mut build_args(":rtrim ::abc"))
+            parse_op(&mut build_args(":rtrim \\:abc"))
         );
         // trimc
         assert_eq!(
@@ -330,7 +330,7 @@ mod tests {
         assert_eq!(vec![":abc"], args.collect::<Vec<_>>());
         assert_eq!(
             Ok(Some(Op::Trim(TrimArg::new(TrimMode::All, Some(":abc".to_string()), true, false)))),
-            parse_op(&mut build_args(":trimc ::abc"))
+            parse_op(&mut build_args(":trimc \\:abc"))
         );
         // ltrimc
         assert_eq!(
@@ -350,7 +350,7 @@ mod tests {
         assert_eq!(vec![":abc"], args.collect::<Vec<_>>());
         assert_eq!(
             Ok(Some(Op::Trim(TrimArg::new(TrimMode::Left, Some(":abc".to_string()), true, false)))),
-            parse_op(&mut build_args(":ltrimc ::abc"))
+            parse_op(&mut build_args(":ltrimc \\:abc"))
         );
         // rtrimc
         assert_eq!(
@@ -370,7 +370,7 @@ mod tests {
         assert_eq!(vec![":abc"], args.collect::<Vec<_>>());
         assert_eq!(
             Ok(Some(Op::Trim(TrimArg::new(TrimMode::Right, Some(":abc".to_string()), true, false)))),
-            parse_op(&mut build_args(":rtrimc ::abc"))
+            parse_op(&mut build_args(":rtrimc \\:abc"))
         );
     }
 

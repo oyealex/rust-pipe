@@ -18,11 +18,11 @@ fn parse_config(input: &str) -> IResult<&str, Config, ParserError<'_>> {
         "Config",
         terminated(
             alt((
-                map(alt((tag("-h"), tag("--help"))), |_| Config::Help),
-                map(alt((tag("-V"), tag("--version"))), |_| Config::Version),
-                map(alt((tag("-v"), tag("--verbose"))), |_| Config::Verbose),
-                map(alt((tag("-d"), tag("--dry-run"))), |_| Config::DryRun),
-                map(alt((tag("-n"), tag("--nocase"))), |_| Config::Nocase),
+                context("Config::Help", map(alt((tag("-h"), tag("--help"))), |_| Config::Help)),
+                context("Config::Version", map(alt((tag("-V"), tag("--version"))), |_| Config::Version)),
+                context("Config::Verbose", map(alt((tag("-v"), tag("--verbose"))), |_| Config::Verbose)),
+                context("Config::DryRun", map(alt((tag("-d"), tag("--dry-run"))), |_| Config::DryRun)),
+                context("Config::Nocase", map(alt((tag("-n"), tag("--nocase"))), |_| Config::Nocase)),
             )),
             space1,
         ),

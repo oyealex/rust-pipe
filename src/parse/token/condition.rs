@@ -1,9 +1,9 @@
 use crate::condition::{Cond, CondRangeArg, CondSpecArg};
-use crate::parse::token::{arg, parse_2_choice, parse_num, ParserError};
+use crate::parse::token::{arg, arg_end, parse_2_choice, parse_num, ParserError};
 use nom::branch::alt;
 use nom::bytes::complete::tag_no_case;
 use nom::character::complete::{char, space1, usize};
-use nom::combinator::{eof, map, opt, peek, success, value, verify};
+use nom::combinator::{map, opt, success, value, verify};
 use nom::error::context;
 use nom::sequence::{preceded, terminated};
 use nom::{IResult, Parser};
@@ -35,7 +35,7 @@ pub(in crate::parse) fn parse_cond(input: &str) -> IResult<&str, Cond, ParserErr
             parse_cond_text_empty_or_blank,
             preceded((tag_no_case("reg"), space1), parse_cond_reg_match),
         )),
-        context("Cond::trailing_space1", space1),
+        context("(trailing_space1)", space1),
     )
     .parse(input)
 }
@@ -51,10 +51,10 @@ where
         map(
             verify(
                 (
-                    context("CondRangeArg::[!]", opt(char('!'))),
-                    context("CondRangeArg::[<min>]", opt(range_arg.clone())),
+                    context("[!]", opt(char('!'))),
+                    context("[<min>]", opt(range_arg.clone())),
                     char(','),
-                    context("CondRangeArg::[<max>]", terminated(opt(range_arg), peek(alt((space1, eof))))),
+                    context("[<max>]", terminated(opt(range_arg), arg_end)),
                 ),
                 |(_, min, _, max)| min.is_some() || max.is_some(),
             ),
@@ -72,11 +72,7 @@ where
     context(
         "CondSpecArg",
         map(
-            (
-                context("CondSpecArg::[!]", opt(char('!'))),
-                char('='),
-                context("CondSpecArg::<spec>", terminated(spec_arg, peek(alt((space1, eof))))),
-            ),
+            (context("[!]", opt(char('!'))), char('='), context("<spec>", terminated(spec_arg, arg_end))),
             |(not, _, spec)| CondSpecArg::new(spec, not.is_some()),
         ),
     )
@@ -117,7 +113,7 @@ pub(in crate::parse) fn parse_cond_text_empty_or_blank(input: &str) -> IResult<&
 pub(in crate::parse) fn parse_cond_reg_match(input: &str) -> IResult<&str, Cond, ParserError<'_>> {
     context(
         "Cond::RegMatch",
-        map(arg, |regex| match Cond::new_reg_match(&regex) {
+        map(context("<exp>", arg), |regex| match Cond::new_reg_match(&regex) {
             Ok(cond) => cond,
             Err(rp_err) => rp_err.termination(),
         }),

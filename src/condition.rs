@@ -31,7 +31,7 @@ impl<T> CondSpecArg<T> {
 /// 条件
 #[derive(Debug, Clone, CmdHelp)]
 pub(crate) enum Cond {
-    /// len [!][<min_len>],[<max_len>]
+    /// len [!][<min>],[<max>]
     ///     按照字符串长度范围选择，范围表达式最小值和最大值至少指定其一，支持可选的否定。
     ///     例如：
     ///         len 2,
@@ -82,6 +82,7 @@ pub(crate) enum Cond {
     TextEmptyOrBlank(bool /*is_empty*/),
     /// reg <exp>
     ///     选择匹配给定正则表达式的数据。
+    ///     <exp>   正则表达式，必选。
     ///     例如：
     ///         reg '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
     RegMatch(Regex),

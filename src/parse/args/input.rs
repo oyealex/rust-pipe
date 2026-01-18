@@ -29,7 +29,7 @@ fn parse_std_in(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Inp
 
 fn parse_file(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Input, RpErr> {
     args.next(); // 消耗命令文本
-    Ok(Input::new_file(parse_arg1(args, ":file", "file_name")?))
+    Ok(Input::new_file(parse_arg1(args, ":file", "file")?))
 }
 
 #[cfg(windows)]
@@ -102,7 +102,7 @@ mod tests {
         assert_eq!(Some(":123".to_string()), args.next());
 
         let mut args = build_args(":file");
-        assert_eq!(Err(RpErr::MissingArg { cmd: ":file", arg: "file_name" }), parse_input(&mut args));
+        assert_eq!(Err(RpErr::MissingArg { cmd: ":file", arg: "file" }), parse_input(&mut args));
         assert!(args.next().is_none());
 
         let mut args = build_args(":file [ ]");
@@ -143,6 +143,10 @@ mod tests {
     #[test]
     fn test_parse_gen() {
         let mut args = build_args(":gen 0");
+        assert_eq!(Ok(Input::new_gen(0, Integer::MAX, 1, None)), parse_input(&mut args));
+        assert!(args.next().is_none());
+
+        let mut args = build_args(":gen 0,");
         assert_eq!(Ok(Input::new_gen(0, Integer::MAX, 1, None)), parse_input(&mut args));
         assert!(args.next().is_none());
 

@@ -52,14 +52,12 @@ fn parse_opt_arg(args: &mut Peekable<impl Iterator<Item = String>>) -> Option<St
     }
 }
 
-/// 解析一个必选参数，处理转义
+/// 解析一个必选参数，尝试处理转义，转义失败则返回原字符串
 fn parse_arg(args: &mut Peekable<impl Iterator<Item = String>>) -> Option<String> {
-    args.next().map(escape)
-}
-
-fn escape<T: AsRef<str>>(arg: T) -> String {
-    let arg = crate::parse::token::escape_string(arg.as_ref());
-    if let Some(stripped) = arg.strip_prefix("::") { format!(":{}", stripped) } else { arg }
+    args.next().map(|s| {
+        let s = if let Some(stripped) = s.strip_prefix("\\:") { format!(":{}", stripped) } else { s };
+        if let Ok((_, val)) = crate::parse::token::escape(&s) { val } else { s }
+    })
 }
 
 fn parse_tag_nocase(args: &mut Peekable<impl Iterator<Item = String>>, tag: &'static str) -> bool {
@@ -146,7 +144,9 @@ fn build_args(args_line: &'static str) -> Peekable<impl Iterator<Item = String>>
     args_line
         .split(' ')
         .into_iter()
-        .map(|s| crate::parse::token::arg(s).unwrap_or_default().1)
-        .map(String::from)
+        .map(|s| crate::parse::token::arg(s).ok().map(|(remaining, mut res)| {
+            res.push_str(remaining);
+            res
+        }).unwrap_or_else(|| s.to_owned()))
         .peekable()
 }

@@ -1,12 +1,12 @@
 use crate::op::trim::{TrimArg, TrimMode};
 use crate::op::{CaseArg, JoinInfo, Op, PeekArg, SortBy, TakeDropMode};
 use crate::parse::token::condition::parse_cond;
-use crate::parse::token::{arg, arg_exclude_cmd, general_file_info, parse_arg_as, ParserError};
+use crate::parse::token::{arg, arg_end, arg_exclude_cmd, general_file_info, parse_arg_as, ParserError};
 use crate::{Float, Integer};
 use nom::branch::alt;
 use nom::bytes::complete::tag_no_case;
 use nom::character::complete::{space1, usize};
-use nom::combinator::{eof, map, opt, peek, value, verify};
+use nom::combinator::{map, opt, value, verify};
 use nom::error::context;
 use nom::multi::many0;
 use nom::sequence::{delimited, preceded, terminated};
@@ -42,7 +42,7 @@ fn parse_peek(input: &str) -> OpResult<'_> {
                     tag_no_case(":peek"),                           // 丢弃命令
                     opt(preceded(space1, general_file_info(true))), // 可选文件信息
                 ),
-                space1, // 结尾空格
+                context("(trailing_space1)", space1), // 结尾空格
             ),
             |file_info| match file_info {
                 Some((file, append_opt, postfix_opt)) => Op::Peek(PeekArg::File {
@@ -77,14 +77,14 @@ fn parse_replace(input: &str) -> OpResult<'_> {
                 tag_no_case(":replace"), // 丢弃：命令+空格
                 terminated(
                     (
-                        preceded(space1, arg), // 被替换文本
+                        preceded(space1, context("<from>", arg)), // 被替换文本
                         (
-                            preceded(space1, arg),                        // 替换为文本
-                            opt(preceded(space1, usize)),                 // 替换次数
-                            opt(preceded(space1, tag_no_case("nocase"))), // 忽略大小写
+                            preceded(space1, context("<to>", arg)),           // 替换为文本
+                            opt(preceded(space1, context("<count>", usize))), // 替换次数
+                            opt(preceded(space1, tag_no_case("nocase"))),     // 忽略大小写
                         ),
                     ),
-                    space1, // 丢弃：结尾空格
+                    context("(trailing_space1)", space1), // 丢弃：结尾空格
                 ),
             ),
             |(from, (to, count_opt, nocase_opt))| Op::new_replace(from, to, count_opt, nocase_opt.is_some()),
@@ -100,19 +100,19 @@ fn parse_trim(input: &str) -> OpResult<'_> {
             terminated(
                 (
                     alt((
-                        value((TrimMode::All, false), (tag_no_case(":trim"), peek(alt((space1, eof))))),
-                        value((TrimMode::Left, false), (tag_no_case(":ltrim"), peek(alt((space1, eof))))),
-                        value((TrimMode::Right, false), (tag_no_case(":rtrim"), peek(alt((space1, eof))))),
-                        value((TrimMode::All, true), (tag_no_case(":trimc"), peek(alt((space1, eof))))),
-                        value((TrimMode::Left, true), (tag_no_case(":ltrimc"), peek(alt((space1, eof))))),
-                        value((TrimMode::Right, true), (tag_no_case(":rtrimc"), peek(alt((space1, eof))))),
+                        value((TrimMode::All, false), (tag_no_case(":trim"), arg_end)),
+                        value((TrimMode::Left, false), (tag_no_case(":ltrim"), arg_end)),
+                        value((TrimMode::Right, false), (tag_no_case(":rtrim"), arg_end)),
+                        value((TrimMode::All, true), (tag_no_case(":trimc"), arg_end)),
+                        value((TrimMode::Left, true), (tag_no_case(":ltrimc"), arg_end)),
+                        value((TrimMode::Right, true), (tag_no_case(":rtrimc"), arg_end)),
                     )),
                     opt(preceded(
                         space1,
-                        (context("Op::Trim::<pattern>", arg_exclude_cmd), opt(preceded(space1, tag_no_case("nocase")))),
+                        (context("<pattern>", arg_exclude_cmd), opt(preceded(space1, tag_no_case("nocase")))),
                     )),
                 ),
-                context("Op::Trim::trailing_space1", space1), // 结尾空格
+                context("(trailing_space1)", space1), // 结尾空格
             ),
             |((trim_mode, char_mode), pattern_and_nocase)| match pattern_and_nocase {
                 Some((pattern, nocase)) => {
@@ -132,7 +132,7 @@ fn parse_uniq(input: &str) -> OpResult<'_> {
             delimited(
                 tag_no_case(":uniq"),                         // 丢弃：命令
                 opt(preceded(space1, tag_no_case("nocase"))), // 可选：空格+nocase选项
-                space1,                                       // 丢弃：结尾空格
+                context("(trailing_space1)", space1),         // 丢弃：结尾空格
             ),
             |nocase_opt| Op::Uniq(nocase_opt.is_some()),
         ),
@@ -148,17 +148,17 @@ fn parse_join(input: &str) -> OpResult<'_> {
                 preceded(
                     tag_no_case(":join"),
                     opt((
-                        context("Op::Join::<delimiter>", preceded(space1, arg_exclude_cmd)), // 分隔符
+                        context("<delimiter>", preceded(space1, arg_exclude_cmd)), // 分隔符
                         opt((
-                            context("Op::Join::<prefix>", preceded(space1, arg_exclude_cmd)), // 前缀
+                            context("<prefix>", preceded(space1, arg_exclude_cmd)), // 前缀
                             opt((
-                                context("Op::Join::<postfix>", preceded(space1, arg_exclude_cmd)), // 后缀
-                                opt(context("Op::Join::<batch>", preceded(space1, verify(usize, |s| *s > 0)))), // 分组大小
+                                context("<postfix>", preceded(space1, arg_exclude_cmd)), // 后缀
+                                opt(context("<batch>", preceded(space1, verify(usize, |s| *s > 0)))), // 分组大小
                             )),
                         )),
                     )),
                 ),
-                context("Op::Join::trailing_space1", space1),
+                context("(trailing_space1)", space1),
             ),
             |delimiter_opt| {
                 let (join_info, batch) = if let Some((delimiter, prefix_opt)) = delimiter_opt {
@@ -189,16 +189,24 @@ fn parse_take_drop(input: &str) -> OpResult<'_> {
     context(
         "Op::TakeDrop",
         alt((
-            map(preceded((tag_no_case(":take"), space1, tag_no_case("while"), space1), parse_cond), |cond| {
-                Op::new_take_drop(TakeDropMode::TakeWhile, cond)
-            }),
-            map(preceded((tag_no_case(":drop"), space1, tag_no_case("while"), space1), parse_cond), |cond| {
-                Op::new_take_drop(TakeDropMode::DropWhile, cond)
-            }),
-            map(preceded((tag_no_case(":take"), space1), parse_cond), |cond| {
+            map(
+                preceded(
+                    (tag_no_case(":take"), space1, tag_no_case("while"), space1),
+                    context("<condition>", parse_cond),
+                ),
+                |cond| Op::new_take_drop(TakeDropMode::TakeWhile, cond),
+            ),
+            map(
+                preceded(
+                    (tag_no_case(":drop"), space1, tag_no_case("while"), space1),
+                    context("<condition>", parse_cond),
+                ),
+                |cond| Op::new_take_drop(TakeDropMode::DropWhile, cond),
+            ),
+            map(preceded((tag_no_case(":take"), space1), context("<condition>", parse_cond)), |cond| {
                 Op::new_take_drop(TakeDropMode::Take, cond)
             }),
-            map(preceded((tag_no_case(":drop"), space1), parse_cond), |cond| {
+            map(preceded((tag_no_case(":drop"), space1), context("<condition>", parse_cond)), |cond| {
                 Op::new_take_drop(TakeDropMode::Drop, cond)
             }),
         )),
@@ -226,8 +234,8 @@ fn parse_sort(input: &str) -> OpResult<'_> {
                                     preceded(
                                         space1,
                                         (
-                                            parse_arg_as::<Integer>,            // 默认整数值
-                                            opt((space1, tag_no_case("desc"))), // 可选逆序
+                                            context("<default>", parse_arg_as::<Integer>), // 默认整数值
+                                            opt((space1, tag_no_case("desc"))),            // 可选逆序
                                         ),
                                     ),
                                     |(integer, desc): (Integer, Option<_>)| {
@@ -238,8 +246,8 @@ fn parse_sort(input: &str) -> OpResult<'_> {
                                     preceded(
                                         space1,
                                         (
-                                            parse_arg_as::<Float>,              // 默认浮点值
-                                            opt((space1, tag_no_case("desc"))), // 可选逆序
+                                            context("<default>", parse_arg_as::<Float>), // 默认浮点值
+                                            opt((space1, tag_no_case("desc"))),          // 可选逆序
                                         ),
                                     ),
                                     |(float, desc): (Float, Option<_>)| {
@@ -329,7 +337,7 @@ mod tests {
         );
         assert_eq!(parse_trim(":trim :abc "), Ok((":abc ", Op::Trim(TrimArg::new(TrimMode::All, None, false, false)))));
         assert_eq!(
-            parse_trim(":trim ::abc "),
+            parse_trim(":trim \\:abc "),
             Ok(("", Op::Trim(TrimArg::new(TrimMode::All, Some(":abc".to_owned()), false, false))))
         );
         // ltrim
@@ -347,7 +355,7 @@ mod tests {
             Ok((":abc ", Op::Trim(TrimArg::new(TrimMode::Left, None, false, false))))
         );
         assert_eq!(
-            parse_trim(":ltrim ::abc "),
+            parse_trim(":ltrim \\:abc "),
             Ok(("", Op::Trim(TrimArg::new(TrimMode::Left, Some(":abc".to_owned()), false, false))))
         );
         // rtrim
@@ -365,7 +373,7 @@ mod tests {
             Ok((":abc ", Op::Trim(TrimArg::new(TrimMode::Right, None, false, false))))
         );
         assert_eq!(
-            parse_trim(":rtrim ::abc "),
+            parse_trim(":rtrim \\:abc "),
             Ok(("", Op::Trim(TrimArg::new(TrimMode::Right, Some(":abc".to_owned()), false, false))))
         );
         // trimc
@@ -380,7 +388,7 @@ mod tests {
         );
         assert_eq!(parse_trim(":trimc :abc "), Ok((":abc ", Op::Trim(TrimArg::new(TrimMode::All, None, true, false)))));
         assert_eq!(
-            parse_trim(":trimc ::abc "),
+            parse_trim(":trimc \\:abc "),
             Ok(("", Op::Trim(TrimArg::new(TrimMode::All, Some(":abc".to_owned()), true, false))))
         );
         // ltrimc
@@ -398,7 +406,7 @@ mod tests {
             Ok((":abc ", Op::Trim(TrimArg::new(TrimMode::Left, None, true, false))))
         );
         assert_eq!(
-            parse_trim(":ltrimc ::abc "),
+            parse_trim(":ltrimc \\:abc "),
             Ok(("", Op::Trim(TrimArg::new(TrimMode::Left, Some(":abc".to_owned()), true, false))))
         );
         // rtrimc
@@ -416,7 +424,7 @@ mod tests {
             Ok((":abc ", Op::Trim(TrimArg::new(TrimMode::Right, None, true, false))))
         );
         assert_eq!(
-            parse_trim(":rtrimc ::abc "),
+            parse_trim(":rtrimc \\:abc "),
             Ok(("", Op::Trim(TrimArg::new(TrimMode::Right, Some(":abc".to_owned()), true, false))))
         );
     }

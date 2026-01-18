@@ -44,7 +44,7 @@ Usage: rp [<options> [<option_value>]] [<input_cmd>] [<op_cmd>[ ...]] [<output_c
  :clip       从剪切板读取输入。
  :of         使用直接字面值作为输入。
              :of <text>[ <text][...]
-                 <text>  字面值，至少指定一个，如果以':'开头，需要使用'::'转义。
+                 <text>  字面值，至少指定一个，如果以':'开头，需要使用'\:'转义。
              例如：
                  :of line
                  :of line1 "line 2" 'line 3'
