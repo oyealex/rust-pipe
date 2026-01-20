@@ -142,7 +142,7 @@ fn parse_general_file_info(
 #[cfg(test)]
 fn build_args(args_line: &'static str) -> Peekable<impl Iterator<Item = String>> {
     args_line
-        .split(' ')
+        .split_whitespace()
         .into_iter()
         .map(|s| {
             crate::parse::token::arg(s)

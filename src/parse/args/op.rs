@@ -190,7 +190,7 @@ mod tests {
     fn test_non_match() {
         let mut args = build_args("");
         assert_eq!(Ok(None), parse_op(&mut args));
-        assert_eq!(Some("".to_string()), args.next());
+        assert_eq!(None, args.next());
     }
 
     #[test]

@@ -2,46 +2,57 @@ use crate::err::RpErr;
 use crate::{Float, Integer, Num};
 use cmd_help::CmdHelp;
 use regex::Regex;
+use std::fmt::Debug;
 
 /// 条件
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Condition {
     Yes(Select),
-    No(Select),
+    Not(Select),
 }
 
 impl Condition {
     pub(crate) fn new(select: Select, not: bool) -> Condition {
-        if not { Condition::No(select) } else { Condition::Yes(select) }
+        if not { select.not() } else { select.yes() }
     }
 
     pub(crate) fn test(&self, input: &str) -> bool {
         match self {
             Condition::Yes(select) => select.select(input),
-            Condition::No(select) => !select.select(input),
+            Condition::Not(select) => !select.select(input),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum TextSelectMode {
+    Upper,
+    Lower,
+    Ascii,
+    NonAscii,
+    Empty,
+    Blank,
 }
 
 /// 选择
 #[derive(Debug, Clone, CmdHelp)]
 pub(crate) enum Select {
-    /// [!]len [<min>],[<max>]
+    /// [not] len [<min>],[<max>]
     ///     按照字符串长度范围选择，范围表达式最小值和最大值至少指定其一，支持可选否定。
     ///     例如：
     ///         len 2,
     ///         len 2,5
     ///         len ,5
-    ///         !len ,5
-    ///         !len 2,5
+    ///         not len ,5
+    ///         not len 2,5
     TextLenRange { min: Option<usize>, max: Option<usize> },
-    /// [!]len <len>
+    /// [not] len <len>
     ///     按照字符串特定长度选择，支持可选否定。
     ///     例如：
     ///         len 3
-    ///         !len 3
+    ///         not len 3
     TextLenSpec { spec: usize },
-    /// [!]num [<min>],[<max>]
+    /// [not] num [<min>],[<max>]
     ///     按照数值范围选择，范围表达式最小值和最大值至少指定其一，支持可选否定。
     ///     如果无法解析为数则不选择。
     ///     例如：
@@ -49,42 +60,40 @@ pub(crate) enum Select {
     ///         num -2.1,5
     ///         num 2,5.3
     ///         num ,5.3
-    ///         !num 1,5.3
+    ///         not num 1,5.3
     NumRange { min: Option<Num>, max: Option<Num> },
-    /// [!]num <spec>
+    /// [not] num <spec>
     ///     按照数值特定值选择，支持可选否定。
     ///     如果无法解析为数则不选择。
     ///     例如：
     ///         num 3
     ///         num 3.3
-    ///         !num 3.3
+    ///         not num 3.3
     NumSpec { spec: Num },
-    /// [!]num[ [integer|float]]
+    /// [not] num[ [integer|float]]
     ///     按照整数或浮点数选择，如果不指定则选择数值数据，支持可选否定。
     ///     例如：
     ///         num
     ///         num integer
     ///         num float
-    ///         !num
-    ///         !num integer
-    ///         !num float
+    ///         not num
+    ///         not num integer
+    ///         not num float
     Num { integer: Option<bool> },
-    /// [!]upper
+    /// [not] upper
     ///     选择全部为ASCII大写字符的数据，包括空字符串和不支持大小写的字符。
-    /// [!]lower
+    /// [not] lower
     ///     选择全部为ASCII小写字符的数据，包括空字符串和不支持大小写的字符。
-    TextAllCase { upper: bool },
-    /// [!]ascii
+    /// [not] ascii
     ///     选择全部为ASCII字符的数据，包括空字符串。
-    /// [!]nonascii
+    /// [not] nonascii
     ///     选择全部不为ASCII字符的数据，包括空字符串。
-    Ascii { ascii: bool },
-    /// [!]empty
+    /// [not] empty
     ///     选择空字符串数据。
-    /// [!]blank
+    /// [not] blank
     ///     选择全部为空白字符的数据，不包括空字符串。
-    TextEmptyOrBlank { empty: bool },
-    /// [!]reg <exp>
+    Text{mode: TextSelectMode},
+    /// [not] reg <exp>
     ///     选择匹配给定正则表达式的数据。
     ///     <exp>   正则表达式，必选。
     ///     例如：
@@ -104,9 +113,7 @@ impl PartialEq for Select {
             }
             (Select::NumSpec { spec: l }, Select::NumSpec { spec: r }) => l == r,
             (Select::Num { integer: l }, Select::Num { integer: r }) => l == r,
-            (Select::TextAllCase { upper: l }, Select::TextAllCase { upper: r }) => l == r,
-            (Select::Ascii { ascii: l }, Select::Ascii { ascii: r }) => l == r,
-            (Select::TextEmptyOrBlank { empty: l }, Select::TextEmptyOrBlank { empty: r }) => l == r,
+            (Select::Text { mode: l }, Select::Text { mode: r }) => l == r,
             // Regex 比较模式字符串
             (Select::RegMatch { regex: l }, Select::RegMatch { regex: r }) => l.as_str() == r.as_str(),
             // 其他情况都不相等
@@ -129,12 +136,14 @@ impl Select {
             .map_err(|err| RpErr::ParseRegexErr { reg, err: err.to_string() })
     }
 
+    #[inline]
     pub(crate) fn yes(self) -> Condition {
         Condition::Yes(self)
     }
 
-    pub(crate) fn no(self) -> Condition {
-        Condition::No(self)
+    #[inline]
+    pub(crate) fn not(self) -> Condition {
+        Condition::Not(self)
     }
 
     fn select(&self, input: &str) -> bool {
@@ -158,26 +167,15 @@ impl Select {
                     }
                 }
                 None => input.parse::<Float>().map_or(false, |v| v.is_finite()),
-            },
-            Select::TextAllCase { upper } => {
-                if *upper {
-                    !input.chars().any(|c| c.is_lowercase())
-                } else {
-                    !input.chars().any(|c| c.is_uppercase())
-                }
             }
-            Select::Ascii { ascii } => {
-                if *ascii {
-                    input.is_ascii()
-                } else {
-                    input.chars().all(|c| !c.is_ascii())
-                }
-            }
-            Select::TextEmptyOrBlank { empty } => {
-                if *empty {
-                    input.is_empty()
-                } else {
-                    input.chars().all(|c| c.is_whitespace())
+            Select::Text { mode } => {
+                match mode {
+                    TextSelectMode::Upper => !input.chars().any(|c| c.is_lowercase()),
+                    TextSelectMode::Lower => !input.chars().any(|c| c.is_uppercase()),
+                    TextSelectMode::Ascii => input.is_ascii(),
+                    TextSelectMode::NonAscii => input.chars().all(|c| !c.is_ascii()),
+                    TextSelectMode::Empty => input.is_empty(),
+                    TextSelectMode::Blank => input.chars().all(|c| c.is_whitespace()),
                 }
             }
             Select::RegMatch { regex } => regex.is_match(input),
@@ -204,18 +202,18 @@ mod tests {
         assert!(!Select::new_text_len_range(None, Some(3)).yes().test("1234"));
         assert!(Select::new_text_len_range(None, None).yes().test("123"));
         // not
-        assert!(Select::new_text_len_range(Some(3), Some(5)).no().test("12"));
-        assert!(!Select::new_text_len_range(Some(3), Some(5)).no().test("123"));
-        assert!(!Select::new_text_len_range(Some(3), Some(5)).no().test("1234"));
-        assert!(!Select::new_text_len_range(Some(3), Some(5)).no().test("12345"));
-        assert!(Select::new_text_len_range(Some(3), Some(5)).no().test("123456"));
-        assert!(Select::new_text_len_range(Some(3), None).no().test("12"));
-        assert!(!Select::new_text_len_range(Some(3), None).no().test("123"));
-        assert!(!Select::new_text_len_range(Some(3), None).no().test("1234"));
-        assert!(!Select::new_text_len_range(None, Some(3)).no().test("12"));
-        assert!(!Select::new_text_len_range(None, Some(3)).no().test("123"));
-        assert!(Select::new_text_len_range(None, Some(3)).no().test("1234"));
-        assert!(!Select::new_text_len_range(None, None).no().test("123"));
+        assert!(Select::new_text_len_range(Some(3), Some(5)).not().test("12"));
+        assert!(!Select::new_text_len_range(Some(3), Some(5)).not().test("123"));
+        assert!(!Select::new_text_len_range(Some(3), Some(5)).not().test("1234"));
+        assert!(!Select::new_text_len_range(Some(3), Some(5)).not().test("12345"));
+        assert!(Select::new_text_len_range(Some(3), Some(5)).not().test("123456"));
+        assert!(Select::new_text_len_range(Some(3), None).not().test("12"));
+        assert!(!Select::new_text_len_range(Some(3), None).not().test("123"));
+        assert!(!Select::new_text_len_range(Some(3), None).not().test("1234"));
+        assert!(!Select::new_text_len_range(None, Some(3)).not().test("12"));
+        assert!(!Select::new_text_len_range(None, Some(3)).not().test("123"));
+        assert!(Select::new_text_len_range(None, Some(3)).not().test("1234"));
+        assert!(!Select::new_text_len_range(None, None).not().test("123"));
     }
 
     #[test]
@@ -227,12 +225,12 @@ mod tests {
         assert!(Select::TextLenSpec { spec: 3 }.yes().test("123"));
         assert!(!Select::TextLenSpec { spec: 3 }.yes().test("1234"));
         // not
-        assert!(!Select::TextLenSpec { spec: 0 }.no().test(""));
-        assert!(Select::TextLenSpec { spec: 0 }.no().test("1"));
-        assert!(Select::TextLenSpec { spec: 3 }.no().test(""));
-        assert!(Select::TextLenSpec { spec: 3 }.no().test("12"));
-        assert!(!Select::TextLenSpec { spec: 3 }.no().test("123"));
-        assert!(Select::TextLenSpec { spec: 3 }.no().test("1234"));
+        assert!(!Select::TextLenSpec { spec: 0 }.not().test(""));
+        assert!(Select::TextLenSpec { spec: 0 }.not().test("1"));
+        assert!(Select::TextLenSpec { spec: 3 }.not().test(""));
+        assert!(Select::TextLenSpec { spec: 3 }.not().test("12"));
+        assert!(!Select::TextLenSpec { spec: 3 }.not().test("123"));
+        assert!(Select::TextLenSpec { spec: 3 }.not().test("1234"));
     }
 
     #[test]
@@ -252,20 +250,20 @@ mod tests {
         assert!(!Select::new_num_range(None, None).yes().test("abc"));
         assert!(!Select::new_num_range(None, None).yes().test(""));
         // not
-        assert!(Select::new_num_range(Some(Num::from(3)), Some(Num::from(5))).no().test("2"));
-        assert!(!Select::new_num_range(Some(Num::from(3)), Some(Num::from(5))).no().test("3"));
-        assert!(!Select::new_num_range(Some(Num::from(3)), Some(Num::from(5))).no().test("4"));
-        assert!(!Select::new_num_range(Some(Num::from(3)), Some(Num::from(5))).no().test("5"));
-        assert!(Select::new_num_range(Some(Num::from(3)), Some(Num::from(5))).no().test("6"));
-        assert!(Select::new_num_range(Some(Num::from(3)), None).no().test("2"));
-        assert!(!Select::new_num_range(Some(Num::from(3)), None).no().test("3"));
-        assert!(!Select::new_num_range(Some(Num::from(3)), None).no().test("4"));
-        assert!(!Select::new_num_range(None, Some(Num::from(3))).no().test("2"));
-        assert!(!Select::new_num_range(None, Some(Num::from(3))).no().test("3"));
-        assert!(Select::new_num_range(None, Some(Num::from(3))).no().test("4"));
-        assert!(!Select::new_num_range(None, None).no().test("3"));
-        assert!(Select::new_num_range(None, None).no().test("abc"));
-        assert!(Select::new_num_range(None, None).no().test(""));
+        assert!(Select::new_num_range(Some(Num::from(3)), Some(Num::from(5))).not().test("2"));
+        assert!(!Select::new_num_range(Some(Num::from(3)), Some(Num::from(5))).not().test("3"));
+        assert!(!Select::new_num_range(Some(Num::from(3)), Some(Num::from(5))).not().test("4"));
+        assert!(!Select::new_num_range(Some(Num::from(3)), Some(Num::from(5))).not().test("5"));
+        assert!(Select::new_num_range(Some(Num::from(3)), Some(Num::from(5))).not().test("6"));
+        assert!(Select::new_num_range(Some(Num::from(3)), None).not().test("2"));
+        assert!(!Select::new_num_range(Some(Num::from(3)), None).not().test("3"));
+        assert!(!Select::new_num_range(Some(Num::from(3)), None).not().test("4"));
+        assert!(!Select::new_num_range(None, Some(Num::from(3))).not().test("2"));
+        assert!(!Select::new_num_range(None, Some(Num::from(3))).not().test("3"));
+        assert!(Select::new_num_range(None, Some(Num::from(3))).not().test("4"));
+        assert!(!Select::new_num_range(None, None).not().test("3"));
+        assert!(Select::new_num_range(None, None).not().test("abc"));
+        assert!(Select::new_num_range(None, None).not().test(""));
     }
 
     #[test]
@@ -277,12 +275,12 @@ mod tests {
         assert!(!Select::NumSpec { spec: Num::from(3) }.yes().test("abc"));
         assert!(!Select::NumSpec { spec: Num::from(3) }.yes().test(""));
         // not
-        assert!(!Select::NumSpec { spec: Num::from(0) }.no().test("0"));
-        assert!(Select::NumSpec { spec: Num::from(0) }.no().test("1"));
-        assert!(Select::NumSpec { spec: Num::from(3) }.no().test("1"));
-        assert!(!Select::NumSpec { spec: Num::from(3) }.no().test("3"));
-        assert!(Select::NumSpec { spec: Num::from(3) }.no().test("abc"));
-        assert!(Select::NumSpec { spec: Num::from(3) }.no().test(""));
+        assert!(!Select::NumSpec { spec: Num::from(0) }.not().test("0"));
+        assert!(Select::NumSpec { spec: Num::from(0) }.not().test("1"));
+        assert!(Select::NumSpec { spec: Num::from(3) }.not().test("1"));
+        assert!(!Select::NumSpec { spec: Num::from(3) }.not().test("3"));
+        assert!(Select::NumSpec { spec: Num::from(3) }.not().test("abc"));
+        assert!(Select::NumSpec { spec: Num::from(3) }.not().test(""));
     }
 
     #[test]
@@ -308,26 +306,26 @@ mod tests {
         assert!(!Select::new_num_range(None, None).yes().test("-Inf"));
         assert!(!Select::new_num_range(None, None).yes().test(""));
         // not
-        assert!(Select::new_num_range(Some(Num::from(3.0)), Some(Num::from(5.0))).no().test("2"));
-        assert!(!Select::new_num_range(Some(Num::from(3.0)), Some(Num::from(5.0))).no().test("3"));
-        assert!(!Select::new_num_range(Some(Num::from(3.0)), Some(Num::from(5.0))).no().test("4"));
-        assert!(!Select::new_num_range(Some(Num::from(3.0)), Some(Num::from(5.0))).no().test("5"));
-        assert!(Select::new_num_range(Some(Num::from(3.0)), Some(Num::from(5.0))).no().test("6"));
-        assert!(Select::new_num_range(Some(Num::from(3.0)), None).no().test("2"));
-        assert!(!Select::new_num_range(Some(Num::from(3.0)), None).no().test("3"));
-        assert!(!Select::new_num_range(Some(Num::from(3.0)), None).no().test("4"));
-        assert!(!Select::new_num_range(None, Some(Num::from(3.0))).no().test("2"));
-        assert!(!Select::new_num_range(None, Some(Num::from(3.0))).no().test("3"));
-        assert!(Select::new_num_range(None, Some(Num::from(3.0))).no().test("4"));
-        assert!(!Select::new_num_range(None, None).no().test("3"));
-        assert!(Select::new_num_range(None, None).no().test("abc"));
-        assert!(Select::new_num_range(None, None).no().test("NaN"));
-        assert!(Select::new_num_range(None, None).no().test("nan"));
-        assert!(Select::new_num_range(None, None).no().test("inf"));
-        assert!(Select::new_num_range(None, None).no().test("Inf"));
-        assert!(Select::new_num_range(None, None).no().test("-inf"));
-        assert!(Select::new_num_range(None, None).no().test("-Inf"));
-        assert!(Select::new_num_range(None, None).no().test(""));
+        assert!(Select::new_num_range(Some(Num::from(3.0)), Some(Num::from(5.0))).not().test("2"));
+        assert!(!Select::new_num_range(Some(Num::from(3.0)), Some(Num::from(5.0))).not().test("3"));
+        assert!(!Select::new_num_range(Some(Num::from(3.0)), Some(Num::from(5.0))).not().test("4"));
+        assert!(!Select::new_num_range(Some(Num::from(3.0)), Some(Num::from(5.0))).not().test("5"));
+        assert!(Select::new_num_range(Some(Num::from(3.0)), Some(Num::from(5.0))).not().test("6"));
+        assert!(Select::new_num_range(Some(Num::from(3.0)), None).not().test("2"));
+        assert!(!Select::new_num_range(Some(Num::from(3.0)), None).not().test("3"));
+        assert!(!Select::new_num_range(Some(Num::from(3.0)), None).not().test("4"));
+        assert!(!Select::new_num_range(None, Some(Num::from(3.0))).not().test("2"));
+        assert!(!Select::new_num_range(None, Some(Num::from(3.0))).not().test("3"));
+        assert!(Select::new_num_range(None, Some(Num::from(3.0))).not().test("4"));
+        assert!(!Select::new_num_range(None, None).not().test("3"));
+        assert!(Select::new_num_range(None, None).not().test("abc"));
+        assert!(Select::new_num_range(None, None).not().test("NaN"));
+        assert!(Select::new_num_range(None, None).not().test("nan"));
+        assert!(Select::new_num_range(None, None).not().test("inf"));
+        assert!(Select::new_num_range(None, None).not().test("Inf"));
+        assert!(Select::new_num_range(None, None).not().test("-inf"));
+        assert!(Select::new_num_range(None, None).not().test("-Inf"));
+        assert!(Select::new_num_range(None, None).not().test(""));
     }
 
     #[test]
@@ -345,22 +343,22 @@ mod tests {
         assert!(!Select::NumSpec { spec: Num::from(3.0) }.yes().test("-Inf"));
         assert!(!Select::NumSpec { spec: Num::from(3.0) }.yes().test(""));
         // not
-        assert!(!Select::NumSpec { spec: Num::from(0.0) }.no().test("0"));
-        assert!(Select::NumSpec { spec: Num::from(0.0) }.no().test("1"));
-        assert!(Select::NumSpec { spec: Num::from(3.0) }.no().test("1"));
-        assert!(!Select::NumSpec { spec: Num::from(3.0) }.no().test("3"));
-        assert!(Select::NumSpec { spec: Num::from(3.0) }.no().test("abc"));
-        assert!(Select::NumSpec { spec: Num::from(3.0) }.no().test("NaN"));
-        assert!(Select::NumSpec { spec: Num::from(3.0) }.no().test("nan"));
-        assert!(Select::NumSpec { spec: Num::from(3.0) }.no().test("inf"));
-        assert!(Select::NumSpec { spec: Num::from(3.0) }.no().test("Inf"));
-        assert!(Select::NumSpec { spec: Num::from(3.0) }.no().test("-inf"));
-        assert!(Select::NumSpec { spec: Num::from(3.0) }.no().test("-Inf"));
-        assert!(Select::NumSpec { spec: Num::from(3.0) }.no().test(""));
+        assert!(!Select::NumSpec { spec: Num::from(0.0) }.not().test("0"));
+        assert!(Select::NumSpec { spec: Num::from(0.0) }.not().test("1"));
+        assert!(Select::NumSpec { spec: Num::from(3.0) }.not().test("1"));
+        assert!(!Select::NumSpec { spec: Num::from(3.0) }.not().test("3"));
+        assert!(Select::NumSpec { spec: Num::from(3.0) }.not().test("abc"));
+        assert!(Select::NumSpec { spec: Num::from(3.0) }.not().test("NaN"));
+        assert!(Select::NumSpec { spec: Num::from(3.0) }.not().test("nan"));
+        assert!(Select::NumSpec { spec: Num::from(3.0) }.not().test("inf"));
+        assert!(Select::NumSpec { spec: Num::from(3.0) }.not().test("Inf"));
+        assert!(Select::NumSpec { spec: Num::from(3.0) }.not().test("-inf"));
+        assert!(Select::NumSpec { spec: Num::from(3.0) }.not().test("-Inf"));
+        assert!(Select::NumSpec { spec: Num::from(3.0) }.not().test(""));
     }
 
     #[test]
-    fn test_number_not() {
+    fn test_num() {
         // integer
         assert!(!Select::Num { integer: Some(true) }.yes().test("abc"));
         assert!(Select::Num { integer: Some(true) }.yes().test("123"));
@@ -373,17 +371,17 @@ mod tests {
         assert!(!Select::Num { integer: Some(true) }.yes().test("-inf"));
         assert!(!Select::Num { integer: Some(true) }.yes().test("-Inf"));
         assert!(!Select::Num { integer: Some(true) }.yes().test(""));
-        assert!(Select::Num { integer: Some(true) }.no().test("abc"));
-        assert!(!Select::Num { integer: Some(true) }.no().test("123"));
-        assert!(Select::Num { integer: Some(true) }.no().test("123.1"));
-        assert!(Select::Num { integer: Some(true) }.no().test("123.0"));
-        assert!(Select::Num { integer: Some(true) }.no().test("NaN"));
-        assert!(Select::Num { integer: Some(true) }.no().test("nan"));
-        assert!(Select::Num { integer: Some(true) }.no().test("inf"));
-        assert!(Select::Num { integer: Some(true) }.no().test("Inf"));
-        assert!(Select::Num { integer: Some(true) }.no().test("-inf"));
-        assert!(Select::Num { integer: Some(true) }.no().test("-Inf"));
-        assert!(Select::Num { integer: Some(true) }.no().test(""));
+        assert!(Select::Num { integer: Some(true) }.not().test("abc"));
+        assert!(!Select::Num { integer: Some(true) }.not().test("123"));
+        assert!(Select::Num { integer: Some(true) }.not().test("123.1"));
+        assert!(Select::Num { integer: Some(true) }.not().test("123.0"));
+        assert!(Select::Num { integer: Some(true) }.not().test("NaN"));
+        assert!(Select::Num { integer: Some(true) }.not().test("nan"));
+        assert!(Select::Num { integer: Some(true) }.not().test("inf"));
+        assert!(Select::Num { integer: Some(true) }.not().test("Inf"));
+        assert!(Select::Num { integer: Some(true) }.not().test("-inf"));
+        assert!(Select::Num { integer: Some(true) }.not().test("-Inf"));
+        assert!(Select::Num { integer: Some(true) }.not().test(""));
         // float
         assert!(!Select::Num { integer: Some(false) }.yes().test("abc"));
         assert!(!Select::Num { integer: Some(false) }.yes().test("123"));
@@ -396,17 +394,17 @@ mod tests {
         assert!(!Select::Num { integer: Some(false) }.yes().test("-inf"));
         assert!(!Select::Num { integer: Some(false) }.yes().test("-Inf"));
         assert!(!Select::Num { integer: Some(false) }.yes().test(""));
-        assert!(Select::Num { integer: Some(false) }.no().test("abc"));
-        assert!(Select::Num { integer: Some(false) }.no().test("123"));
-        assert!(!Select::Num { integer: Some(false) }.no().test("123.1"));
-        assert!(!Select::Num { integer: Some(false) }.no().test("123.0"));
-        assert!(Select::Num { integer: Some(false) }.no().test("NaN"));
-        assert!(Select::Num { integer: Some(false) }.no().test("nan"));
-        assert!(Select::Num { integer: Some(false) }.no().test("inf"));
-        assert!(Select::Num { integer: Some(false) }.no().test("Inf"));
-        assert!(Select::Num { integer: Some(false) }.no().test("-inf"));
-        assert!(Select::Num { integer: Some(false) }.no().test("-Inf"));
-        assert!(Select::Num { integer: Some(false) }.no().test(""));
+        assert!(Select::Num { integer: Some(false) }.not().test("abc"));
+        assert!(Select::Num { integer: Some(false) }.not().test("123"));
+        assert!(!Select::Num { integer: Some(false) }.not().test("123.1"));
+        assert!(!Select::Num { integer: Some(false) }.not().test("123.0"));
+        assert!(Select::Num { integer: Some(false) }.not().test("NaN"));
+        assert!(Select::Num { integer: Some(false) }.not().test("nan"));
+        assert!(Select::Num { integer: Some(false) }.not().test("inf"));
+        assert!(Select::Num { integer: Some(false) }.not().test("Inf"));
+        assert!(Select::Num { integer: Some(false) }.not().test("-inf"));
+        assert!(Select::Num { integer: Some(false) }.not().test("-Inf"));
+        assert!(Select::Num { integer: Some(false) }.not().test(""));
         // number
         assert!(!Select::Num { integer: None }.yes().test("abc"));
         assert!(Select::Num { integer: None }.yes().test("123"));
@@ -419,82 +417,82 @@ mod tests {
         assert!(!Select::Num { integer: None }.yes().test("-inf"));
         assert!(!Select::Num { integer: None }.yes().test("-Inf"));
         assert!(!Select::Num { integer: None }.yes().test(""));
-        assert!(Select::Num { integer: None }.no().test("abc"));
-        assert!(!Select::Num { integer: None }.no().test("123"));
-        assert!(!Select::Num { integer: None }.no().test("123.1"));
-        assert!(!Select::Num { integer: None }.no().test("123.0"));
-        assert!(Select::Num { integer: None }.no().test("NaN"));
-        assert!(Select::Num { integer: None }.no().test("nan"));
-        assert!(Select::Num { integer: None }.no().test("inf"));
-        assert!(Select::Num { integer: None }.no().test("Inf"));
-        assert!(Select::Num { integer: None }.no().test("-inf"));
-        assert!(Select::Num { integer: None }.no().test("-Inf"));
-        assert!(Select::Num { integer: None }.no().test(""));
+        assert!(Select::Num { integer: None }.not().test("abc"));
+        assert!(!Select::Num { integer: None }.not().test("123"));
+        assert!(!Select::Num { integer: None }.not().test("123.1"));
+        assert!(!Select::Num { integer: None }.not().test("123.0"));
+        assert!(Select::Num { integer: None }.not().test("NaN"));
+        assert!(Select::Num { integer: None }.not().test("nan"));
+        assert!(Select::Num { integer: None }.not().test("inf"));
+        assert!(Select::Num { integer: None }.not().test("Inf"));
+        assert!(Select::Num { integer: None }.not().test("-inf"));
+        assert!(Select::Num { integer: None }.not().test("-Inf"));
+        assert!(Select::Num { integer: None }.not().test(""));
     }
 
     #[test]
     fn test_text_all_case() {
         // upper
-        assert!(!Select::TextAllCase { upper: true }.yes().test("abc"));
-        assert!(Select::TextAllCase { upper: true }.yes().test("ABC"));
-        assert!(!Select::TextAllCase { upper: true }.yes().test("abcABC"));
-        assert!(Select::TextAllCase { upper: true }.yes().test("你好123.#!@"));
-        assert!(Select::TextAllCase { upper: true }.no().test("abc"));
-        assert!(!Select::TextAllCase { upper: true }.no().test("ABC"));
-        assert!(Select::TextAllCase { upper: true }.no().test("abcABC"));
-        assert!(!Select::TextAllCase { upper: true }.no().test("你好123.#!@"));
+        assert!(!Select::Text { mode: TextSelectMode::Upper }.yes().test("abc"));
+        assert!(Select::Text { mode: TextSelectMode::Upper }.yes().test("ABC"));
+        assert!(!Select::Text { mode: TextSelectMode::Upper }.yes().test("abcABC"));
+        assert!(Select::Text { mode: TextSelectMode::Upper }.yes().test("你好123.#!@"));
+        assert!(Select::Text { mode: TextSelectMode::Upper }.not().test("abc"));
+        assert!(!Select::Text { mode: TextSelectMode::Upper }.not().test("ABC"));
+        assert!(Select::Text { mode: TextSelectMode::Upper }.not().test("abcABC"));
+        assert!(!Select::Text { mode: TextSelectMode::Upper }.not().test("你好123.#!@"));
         // lower
-        assert!(Select::TextAllCase { upper: false }.yes().test("abc"));
-        assert!(!Select::TextAllCase { upper: false }.yes().test("ABC"));
-        assert!(!Select::TextAllCase { upper: false }.yes().test("abcABC"));
-        assert!(Select::TextAllCase { upper: false }.yes().test("你好123.#!@"));
-        assert!(!Select::TextAllCase { upper: false }.no().test("abc"));
-        assert!(Select::TextAllCase { upper: false }.no().test("ABC"));
-        assert!(Select::TextAllCase { upper: false }.no().test("abcABC"));
-        assert!(!Select::TextAllCase { upper: false }.no().test("你好123.#!@"));
+        assert!(Select::Text { mode: TextSelectMode::Lower }.yes().test("abc"));
+        assert!(!Select::Text { mode: TextSelectMode::Lower }.yes().test("ABC"));
+        assert!(!Select::Text { mode: TextSelectMode::Lower }.yes().test("abcABC"));
+        assert!(Select::Text { mode: TextSelectMode::Lower }.yes().test("你好123.#!@"));
+        assert!(!Select::Text { mode: TextSelectMode::Lower }.not().test("abc"));
+        assert!(Select::Text { mode: TextSelectMode::Lower }.not().test("ABC"));
+        assert!(Select::Text { mode: TextSelectMode::Lower }.not().test("abcABC"));
+        assert!(!Select::Text { mode: TextSelectMode::Lower }.not().test("你好123.#!@"));
     }
 
     #[test]
     fn test_ascii() {
-        assert!(Select::Ascii { ascii: true }.yes().test("abc"));
-        assert!(Select::Ascii { ascii: true }.yes().test(""));
-        assert!(Select::Ascii { ascii: true }.yes().test("\n"));
-        assert!(!Select::Ascii { ascii: true }.yes().test("你好"));
-        assert!(!Select::Ascii { ascii: false }.yes().test("abc"));
-        assert!(Select::Ascii { ascii: false }.yes().test(""));
-        assert!(!Select::Ascii { ascii: false }.yes().test("\n"));
-        assert!(Select::Ascii { ascii: false }.yes().test("你好"));
+        assert!(Select::Text { mode: TextSelectMode::Ascii }.yes().test("abc"));
+        assert!(Select::Text { mode: TextSelectMode::Ascii }.yes().test(""));
+        assert!(Select::Text { mode: TextSelectMode::Ascii }.yes().test("\n"));
+        assert!(!Select::Text { mode: TextSelectMode::Ascii }.yes().test("你好"));
+        assert!(!Select::Text { mode: TextSelectMode::NonAscii }.yes().test("abc"));
+        assert!(Select::Text { mode: TextSelectMode::NonAscii }.yes().test(""));
+        assert!(!Select::Text { mode: TextSelectMode::NonAscii }.yes().test("\n"));
+        assert!(Select::Text { mode: TextSelectMode::NonAscii }.yes().test("你好"));
         // not
-        assert!(!Select::Ascii { ascii: true }.no().test("abc"));
-        assert!(!Select::Ascii { ascii: true }.no().test(""));
-        assert!(!Select::Ascii { ascii: true }.no().test("\n"));
-        assert!(Select::Ascii { ascii: true }.no().test("你好"));
-        assert!(Select::Ascii { ascii: false }.no().test("abc"));
-        assert!(!Select::Ascii { ascii: false }.no().test(""));
-        assert!(Select::Ascii { ascii: false }.no().test("\n"));
-        assert!(!Select::Ascii { ascii: false }.no().test("你好"));
+        assert!(!Select::Text { mode: TextSelectMode::Ascii }.not().test("abc"));
+        assert!(!Select::Text { mode: TextSelectMode::Ascii }.not().test(""));
+        assert!(!Select::Text { mode: TextSelectMode::Ascii }.not().test("\n"));
+        assert!(Select::Text { mode: TextSelectMode::Ascii }.not().test("你好"));
+        assert!(Select::Text { mode: TextSelectMode::NonAscii }.not().test("abc"));
+        assert!(!Select::Text { mode: TextSelectMode::NonAscii }.not().test(""));
+        assert!(Select::Text { mode: TextSelectMode::NonAscii }.not().test("\n"));
+        assert!(!Select::Text { mode: TextSelectMode::NonAscii }.not().test("你好"));
     }
 
     #[test]
     fn test_text_empty_or_blank() {
         // empty
-        assert!(Select::TextEmptyOrBlank { empty: true }.yes().test(""));
-        assert!(!Select::TextEmptyOrBlank { empty: true }.yes().test("abc"));
-        assert!(!Select::TextEmptyOrBlank { empty: true }.yes().test(" "));
-        assert!(!Select::TextEmptyOrBlank { empty: true }.yes().test(" \n\t\r "));
-        assert!(!Select::TextEmptyOrBlank { empty: true }.no().test(""));
-        assert!(Select::TextEmptyOrBlank { empty: true }.no().test("abc"));
-        assert!(Select::TextEmptyOrBlank { empty: true }.no().test(" "));
-        assert!(Select::TextEmptyOrBlank { empty: true }.no().test(" \n\t\r "));
+        assert!(Select::Text { mode: TextSelectMode::Empty }.yes().test(""));
+        assert!(!Select::Text { mode: TextSelectMode::Empty }.yes().test("abc"));
+        assert!(!Select::Text { mode: TextSelectMode::Empty }.yes().test(" "));
+        assert!(!Select::Text { mode: TextSelectMode::Empty }.yes().test(" \n\t\r "));
+        assert!(!Select::Text { mode: TextSelectMode::Empty }.not().test(""));
+        assert!(Select::Text { mode: TextSelectMode::Empty }.not().test("abc"));
+        assert!(Select::Text { mode: TextSelectMode::Empty }.not().test(" "));
+        assert!(Select::Text { mode: TextSelectMode::Empty }.not().test(" \n\t\r "));
         // blank
-        assert!(Select::TextEmptyOrBlank { empty: false }.yes().test(""));
-        assert!(!Select::TextEmptyOrBlank { empty: false }.yes().test("abc"));
-        assert!(Select::TextEmptyOrBlank { empty: false }.yes().test(" "));
-        assert!(Select::TextEmptyOrBlank { empty: false }.yes().test(" \n\t\r "));
-        assert!(!Select::TextEmptyOrBlank { empty: false }.no().test(""));
-        assert!(Select::TextEmptyOrBlank { empty: false }.no().test("abc"));
-        assert!(!Select::TextEmptyOrBlank { empty: false }.no().test(" "));
-        assert!(!Select::TextEmptyOrBlank { empty: false }.no().test(" \n\t\r "));
+        assert!(Select::Text { mode: TextSelectMode::Blank }.yes().test(""));
+        assert!(!Select::Text { mode: TextSelectMode::Blank }.yes().test("abc"));
+        assert!(Select::Text { mode: TextSelectMode::Blank }.yes().test(" "));
+        assert!(Select::Text { mode: TextSelectMode::Blank }.yes().test(" \n\t\r "));
+        assert!(!Select::Text { mode: TextSelectMode::Blank }.not().test(""));
+        assert!(Select::Text { mode: TextSelectMode::Blank }.not().test("abc"));
+        assert!(!Select::Text { mode: TextSelectMode::Blank }.not().test(" "));
+        assert!(!Select::Text { mode: TextSelectMode::Blank }.not().test(" \n\t\r "));
     }
 
     #[test]
@@ -507,10 +505,10 @@ mod tests {
         assert!(!Select::new_reg_match(r"(?m)\d+").unwrap().yes().test("123\n123"));
         assert!(Select::new_reg_match(r"(?m)[\d\n]+").unwrap().yes().test("123\n123"));
         // not
-        assert!(!Select::new_reg_match(r"\d+").unwrap().no().test("123"));
-        assert!(Select::new_reg_match(r"\d+").unwrap().no().test("123abc"));
-        assert!(Select::new_reg_match(r"\d+").unwrap().no().test("123\n123"));
-        assert!(Select::new_reg_match(r"(?m)\d+").unwrap().no().test("123\n123"));
-        assert!(!Select::new_reg_match(r"(?m)[\d\n]+").unwrap().no().test("123\n123"));
+        assert!(!Select::new_reg_match(r"\d+").unwrap().not().test("123"));
+        assert!(Select::new_reg_match(r"\d+").unwrap().not().test("123abc"));
+        assert!(Select::new_reg_match(r"\d+").unwrap().not().test("123\n123"));
+        assert!(Select::new_reg_match(r"(?m)\d+").unwrap().not().test("123\n123"));
+        assert!(!Select::new_reg_match(r"(?m)[\d\n]+").unwrap().not().test("123\n123"));
     }
 }

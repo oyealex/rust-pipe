@@ -85,7 +85,7 @@ mod tests {
 
         let mut args = build_args("");
         assert_eq!(Ok(Input::new_std_in()), parse_input(&mut args));
-        assert_eq!(Some("".to_string()), args.next());
+        assert_eq!(None, args.next());
     }
 
     #[test]

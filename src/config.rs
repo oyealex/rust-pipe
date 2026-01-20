@@ -51,6 +51,7 @@ pub(crate) fn skip_err(configs: &[Config]) -> bool {
 }
 
 pub(crate) fn print_pipe_info(input: &Input, ops: &Vec<Op>, output: &Output) {
+    // TODO 2026-01-20 22:58 使用Display以可读形式描述流水线。
     println_info!("Input:");
     println_notice!("  {:?}", input);
     println_info!("Op:");

@@ -128,12 +128,6 @@ where
     map(verify(arg, |s: &String| s.parse::<T>().is_ok()), |s| s.parse::<T>().unwrap()).parse(input)
 }
 
-pub(in crate::parse) fn parse_2_choice<'a>(
-    primary: &'static str, second: &'static str,
-) -> impl Parser<&'a str, Output = bool, Error = ParserError<'a>> {
-    alt((value(true, tag_no_case(primary)), value(false, tag_no_case(second))))
-}
-
 /// 按照类PosixShell的规则解析单个参数
 ///
 /// *参考：* https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html?spm=a2ty_o01.29997173.0.0.488051715w53V1#tag_18_02_02
