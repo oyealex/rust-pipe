@@ -95,5 +95,6 @@ pub fn run(mut args: Peekable<impl Iterator<Item = String>>) -> Result<(), RpErr
     for op in ops {
         pipe = op.wrap(pipe, configs)?;
     }
+    // TODO 2026-01-22 02:39 rp -v -d :sort 由于已经打开了std in，导致dry run会阻塞在sort
     if configs.contains(&Config::DryRun) { Ok(()) } else { output.handle(pipe) }
 }

@@ -55,7 +55,13 @@ pub(crate) fn print_pipe_info(input: &Input, ops: &Vec<Op>, output: &Output) {
     println_info!("Input:");
     println_notice!("  {:?}", input);
     println_info!("Op:");
-    println_notice!("{}", ops.iter().enumerate().map(|(idx, op)| format!("  {:>02} {:?}", idx + 1, op)).join("\n"));
+    println_notice!(
+        "{}",
+        ops.iter()
+            .enumerate()
+            .map(|(idx, op)| format!("  {:>0width$} {:?}", idx + 1, op, width = ops.len().to_string().len()))
+            .join("\n")
+    );
     println_info!("Output:");
     println_notice!("  {:?}", output);
 }
