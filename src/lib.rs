@@ -77,7 +77,7 @@ impl PartialEq for Num {
 pub(crate) type PipeRes = Result<Pipe, RpErr>;
 
 pub fn run(mut args: Peekable<impl Iterator<Item = String>>) -> Result<(), RpErr> {
-    let configs = parse::args::parse_configs(&mut args);
+    let configs = parse::args::parse_configs(&mut args)?;
     if configs.contains(&Config::Help) {
         help::print_help(&mut args);
         return Ok(());

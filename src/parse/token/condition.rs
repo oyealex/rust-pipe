@@ -1,5 +1,6 @@
 use crate::condition::{Condition, Select, TextSelectMode};
-use crate::parse::token::{arg, arg_end, parse_num, ParserError};
+use crate::parse::token::{arg, arg_end, map_res_failure, parse_num};
+use crate::parse::RpParseErr;
 use nom::branch::alt;
 use nom::bytes::complete::tag_no_case;
 use nom::character::complete::{char, space1, usize};
@@ -8,7 +9,7 @@ use nom::error::context;
 use nom::sequence::{preceded, terminated};
 use nom::{IResult, Parser};
 
-pub(in crate::parse) fn parse_cond(input: &str) -> IResult<&str, Condition, ParserError<'_>> {
+pub(in crate::parse) fn parse_cond(input: &str) -> IResult<&str, Condition, RpParseErr<'_>> {
     terminated(
         alt((
             context(
@@ -77,9 +78,9 @@ pub(in crate::parse) fn parse_cond(input: &str) -> IResult<&str, Condition, Pars
 
 pub(in crate::parse) fn parse_cond_range<'a, T, F>(
     range_arg: F,
-) -> impl Parser<&'a str, Output = (Option<T>, Option<T>), Error = ParserError<'a>>
+) -> impl Parser<&'a str, Output = (Option<T>, Option<T>), Error = RpParseErr<'a>>
 where
-    F: Parser<&'a str, Output = T, Error = ParserError<'a>> + Clone,
+    F: Parser<&'a str, Output = T, Error = RpParseErr<'a>> + Clone,
 {
     map(
         (
@@ -93,18 +94,18 @@ where
 
 pub(in crate::parse) fn parse_cond_spec<'a, T, F>(
     spec_arg: F,
-) -> impl Parser<&'a str, Output = T, Error = ParserError<'a>>
+) -> impl Parser<&'a str, Output = T, Error = RpParseErr<'a>>
 where
-    F: Parser<&'a str, Output = T, Error = ParserError<'a>>,
+    F: Parser<&'a str, Output = T, Error = RpParseErr<'a>>,
 {
     map(context("<spec>", terminated(spec_arg, arg_end)), |spec| spec)
 }
 
-pub(in crate::parse) fn parse_cond_num(input: &str) -> IResult<&str, bool, ParserError<'_>> {
+pub(in crate::parse) fn parse_cond_num(input: &str) -> IResult<&str, bool, RpParseErr<'_>> {
     alt((value(true, tag_no_case("integer")), value(false, tag_no_case("float")))).parse(input)
 }
 
-pub(in crate::parse) fn parse_cond_text(input: &str) -> IResult<&str, Condition, ParserError<'_>> {
+pub(in crate::parse) fn parse_cond_text(input: &str) -> IResult<&str, Condition, RpParseErr<'_>> {
     context(
         "Cond::Text",
         map(
@@ -125,12 +126,8 @@ pub(in crate::parse) fn parse_cond_text(input: &str) -> IResult<&str, Condition,
     .parse(input)
 }
 
-pub(in crate::parse) fn parse_cond_reg_match(input: &str) -> IResult<&str, Select, ParserError<'_>> {
-    map(context("<exp>", arg), |regex| match Select::new_reg_match(&regex) {
-        Ok(cond) => cond,
-        Err(rp_err) => rp_err.termination(),
-    })
-    .parse(input)
+pub(in crate::parse) fn parse_cond_reg_match(input: &str) -> IResult<&str, Select, RpParseErr<'_>> {
+    map_res_failure(context("<exp>", arg), |regex| Select::new_reg_match(&regex)).parse(input)
 }
 
 #[cfg(test)]

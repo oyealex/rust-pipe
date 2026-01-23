@@ -1,17 +1,18 @@
 use crate::config::Config;
+use crate::parse::{ConfigOptResult, ConfigsResult};
 use std::iter::Peekable;
 
-pub fn parse_configs(args: &mut Peekable<impl Iterator<Item = String>>) -> Vec<Config> {
+pub fn parse_configs(args: &mut Peekable<impl Iterator<Item = String>>) -> ConfigsResult {
     let mut configs = Vec::new();
-    while let Some(config) = parse_config(args.peek()) {
+    while let Some(config) = parse_config(args.peek())? {
         args.next();
         configs.push(config);
     }
-    configs
+    Ok(configs)
 }
 
-fn parse_config(arg: Option<&String>) -> Option<Config> {
-    match arg {
+fn parse_config(arg: Option<&String>) -> ConfigOptResult {
+    Ok(match arg {
         Some(arg) => match arg.as_str() {
             "-h" | "--help" => Some(Config::Help),
             "-V" | "--version" => Some(Config::Version),
@@ -22,5 +23,5 @@ fn parse_config(arg: Option<&String>) -> Option<Config> {
             _ => None, // 遇到未知参数，停止解析
         },
         None => None,
-    }
+    })
 }

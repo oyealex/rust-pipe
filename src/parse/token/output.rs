@@ -1,6 +1,6 @@
 use crate::output::Output;
 use crate::parse::token::general_file_info;
-use crate::parse::token::ParserError;
+use crate::parse::RpParseErr;
 use nom::branch::alt;
 use nom::bytes::complete::tag_no_case;
 use nom::character::complete::space1;
@@ -10,9 +10,9 @@ use nom::sequence::{preceded, terminated};
 use nom::IResult;
 use nom::Parser;
 
-pub(in crate::parse) type OutputResult<'a> = IResult<&'a str, Output, ParserError<'a>>;
+pub(in crate::parse) type OutputIResult<'a> = IResult<&'a str, Output, RpParseErr<'a>>;
 
-pub(in crate::parse) fn parse_out(input: &str) -> OutputResult<'_> {
+pub(in crate::parse) fn parse_out(input: &str) -> OutputIResult<'_> {
     context(
         "Output",
         alt((
@@ -26,7 +26,7 @@ pub(in crate::parse) fn parse_out(input: &str) -> OutputResult<'_> {
     .parse(input)
 }
 
-fn parse_to_std_out(input: &str) -> OutputResult<'_> {
+fn parse_to_std_out(input: &str) -> OutputIResult<'_> {
     context(
         "Output::StdOut",
         map(
@@ -37,7 +37,7 @@ fn parse_to_std_out(input: &str) -> OutputResult<'_> {
     .parse(input)
 }
 
-fn parse_to_file(input: &str) -> OutputResult<'_> {
+fn parse_to_file(input: &str) -> OutputIResult<'_> {
     context(
         "Output::File",
         map(
@@ -57,7 +57,7 @@ fn parse_to_file(input: &str) -> OutputResult<'_> {
 }
 
 #[cfg(windows)]
-fn parse_to_clip(input: &str) -> OutputResult<'_> {
+fn parse_to_clip(input: &str) -> OutputIResult<'_> {
     context(
         "Output::Clip",
         map(

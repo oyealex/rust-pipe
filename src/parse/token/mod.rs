@@ -4,13 +4,16 @@ pub(in crate::parse) mod input;
 pub(in crate::parse) mod op;
 pub(in crate::parse) mod output;
 
+use crate::config::Config;
 use crate::err::RpErr;
 use crate::input::Input;
 use crate::op::Op;
 use crate::output::Output;
+use crate::parse::token::config::parse_configs;
 use crate::parse::token::input::parse_input;
 use crate::parse::token::op::parse_ops;
 use crate::parse::token::output::parse_out;
+use crate::Num;
 use nom::branch::alt;
 use nom::bytes::complete::{escaped, take_while1};
 use nom::bytes::complete::{tag_no_case, take_while};
@@ -21,21 +24,45 @@ use nom::error::context;
 use nom::multi::{fold_many1, many_till};
 use nom::sequence::{delimited, preceded, separated_pair};
 use nom::{ExtendInto, IResult, Parser};
-use nom_language::error::VerboseError;
 use std::borrow::Cow;
 use std::str::FromStr;
 
-/// 解析错误的类型
-pub(crate) type ParserError<'a> = VerboseError<&'a str>;
-
-use crate::config::Config;
-use crate::parse::token::config::parse_configs;
-use crate::Num;
+use crate::parse::RpParseErr;
 /// 重新导出解析整数的函数
 pub(in crate::parse) use nom::character::complete::i64 as parse_integer;
 pub(in crate::parse) use nom::number::complete::double as parse_float;
 
-pub(in crate::parse) fn parse_num(input: &str) -> IResult<&str, Num, ParserError<'_>> {
+#[allow(unused)]
+pub(crate) fn parse(token: &str) -> Result<(&str, (Vec<Config>, Input, Vec<Op>, Output)), RpErr> {
+    let (token, configs) = parse_configs(token).map_err(RpErr::from)?;
+    let (token, input) = parse_input(token).map_err(RpErr::from)?;
+    let (token, ops) = parse_ops(token).map_err(RpErr::from)?;
+    let (token, output) = parse_out(token).map_err(RpErr::from)?;
+    Ok((token, (configs, input, ops, output)))
+}
+
+pub(crate) fn parse_without_configs(token: &str) -> Result<(&str, (Input, Vec<Op>, Output)), RpErr> {
+    let (token, input) = parse_input(token).map_err(RpErr::from)?;
+    let (token, ops) = parse_ops(token).map_err(RpErr::from)?;
+    let (token, output) = parse_out(token).map_err(RpErr::from)?;
+    Ok((token, (input, ops, output)))
+}
+
+fn map_res_failure<'a, O, F, G>(mut parser: F, mut f: G) -> impl Parser<&'a str, Output = O, Error = RpParseErr<'a>>
+where
+    F: Parser<&'a str, Error = RpParseErr<'a>>,
+    G: FnMut(<F as Parser<&'a str>>::Output) -> Result<O, RpErr>,
+{
+    move |input| {
+        let (remaining, result) = parser.parse(input)?;
+        match f(result) {
+            Ok(result) => Ok((remaining, result)),
+            Err(err) => Err(nom::Err::Failure(RpParseErr::Rp((remaining, None, err)))),
+        }
+    }
+}
+
+pub(in crate::parse) fn parse_num(input: &str) -> IResult<&str, Num, RpParseErr<'_>> {
     map_res(
         recognize(alt((
             // alt要求所有子解析器返回类型相同，所以使用value转换，最终会在外层完成Num转换。
@@ -47,25 +74,9 @@ pub(in crate::parse) fn parse_num(input: &str) -> IResult<&str, Num, ParserError
     .parse(input)
 }
 
-#[allow(unused)]
-pub(crate) fn parse(token: &str) -> Result<(&str, (Vec<Config>, Input, Vec<Op>, Output)), RpErr> {
-    let (token, configs) = parse_configs(token).map_err(|err| RpErr::ParseConfigTokenErr(err.to_string()))?;
-    let (token, input) = parse_input(token).map_err(|err| RpErr::ParseInputTokenErr(err.to_string()))?;
-    let (token, ops) = parse_ops(token).map_err(|err| RpErr::ParseOpTokenErr(err.to_string()))?;
-    let (token, output) = parse_out(token).map_err(|err| RpErr::ParseOutputTokenErr(err.to_string()))?;
-    Ok((token, (configs, input, ops, output)))
-}
-
-pub(crate) fn parse_without_configs(token: &str) -> Result<(&str, (Input, Vec<Op>, Output)), RpErr> {
-    let (token, input) = parse_input(token).map_err(|err| RpErr::ParseInputTokenErr(err.to_string()))?;
-    let (token, ops) = parse_ops(token).map_err(|err| RpErr::ParseOpTokenErr(err.to_string()))?;
-    let (token, output) = parse_out(token).map_err(|err| RpErr::ParseOutputTokenErr(err.to_string()))?;
-    Ok((token, (input, ops, output)))
-}
-
 fn general_file_info<'a>(
     optional: bool,
-) -> impl Parser<&'a str, Output = (String, Option<&'a str>, Option<&'a str>), Error = ParserError<'a>> {
+) -> impl Parser<&'a str, Output = (String, Option<&'a str>, Option<&'a str>), Error = RpParseErr<'a>> {
     (
         context("<file>", if optional { arg_exclude_cmd } else { arg }), // 文件
         opt(preceded(space1, tag_no_case("append"))),                    // 是否追加
@@ -76,7 +87,7 @@ fn general_file_info<'a>(
 /// 如果参数以冒号开头需要使用`\:`代替开头的`:`。
 fn cmd_arg1<'a>(
     cmd_name: &'a str, arg_name: &'static str,
-) -> impl Parser<&'a str, Output = Vec<String>, Error = ParserError<'a>> {
+) -> impl Parser<&'a str, Output = Vec<String>, Error = RpParseErr<'a>> {
     preceded(
         // 丢弃：命令标记
         tag_no_case(cmd_name),
@@ -96,7 +107,7 @@ fn cmd_arg1<'a>(
     )
 }
 
-fn arg_exclude_cmd(input: &str) -> IResult<&str, String, ParserError<'_>> {
+fn arg_exclude_cmd(input: &str) -> IResult<&str, String, RpParseErr<'_>> {
     context(
         "arg_exclude_cmd",
         map(verify(arg, |s: &String| whole_cmd_token(s).is_err()), |s| {
@@ -106,21 +117,21 @@ fn arg_exclude_cmd(input: &str) -> IResult<&str, String, ParserError<'_>> {
     .parse(input)
 }
 
-fn cmd(input: &str) -> IResult<&str, &str, ParserError<'_>> {
+fn cmd(input: &str) -> IResult<&str, &str, RpParseErr<'_>> {
     recognize((char(':'), take_while1(|c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')))
         .parse(input)
 }
 
-fn arg_end(input: &str) -> IResult<&str, &str, ParserError<'_>> {
+fn arg_end(input: &str) -> IResult<&str, &str, RpParseErr<'_>> {
     peek(alt((space1, eof))).parse(input)
 }
 
 /// 判断是否整个token为命令格式。
-pub(in crate::parse) fn whole_cmd_token(input: &str) -> IResult<&str, &str, ParserError<'_>> {
+pub(in crate::parse) fn whole_cmd_token(input: &str) -> IResult<&str, &str, RpParseErr<'_>> {
     recognize((cmd, eof)).parse(input)
 }
 
-pub(in crate::parse) fn parse_arg_as<T>(input: &str) -> IResult<&str, T, ParserError<'_>>
+pub(in crate::parse) fn parse_arg_as<T>(input: &str) -> IResult<&str, T, RpParseErr<'_>>
 where
     T: FromStr,
     <T as FromStr>::Err: std::fmt::Debug,
@@ -131,7 +142,7 @@ where
 /// 按照类PosixShell的规则解析单个参数
 ///
 /// *参考：* https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html?spm=a2ty_o01.29997173.0.0.488051715w53V1#tag_18_02_02
-pub(in crate::parse) fn arg(input: &str) -> IResult<&str, String, ParserError<'_>> {
+pub(in crate::parse) fn arg(input: &str) -> IResult<&str, String, RpParseErr<'_>> {
     fold_many1(
         alt((
             map(normal_part, |string| Cow::Owned(string)),
@@ -150,7 +161,7 @@ pub(in crate::parse) fn arg(input: &str) -> IResult<&str, String, ParserError<'_
     .parse(input)
 }
 
-fn normal_part(input: &str) -> IResult<&str, String, ParserError<'_>> {
+fn normal_part(input: &str) -> IResult<&str, String, RpParseErr<'_>> {
     context(
         "arg_normal_part",
         verify(
@@ -168,7 +179,7 @@ fn normal_part(input: &str) -> IResult<&str, String, ParserError<'_>> {
     .parse(input)
 }
 
-fn double_quota_part(input: &str) -> IResult<&str, String, ParserError<'_>> {
+fn double_quota_part(input: &str) -> IResult<&str, String, RpParseErr<'_>> {
     context(
         "arg_double_quota_part",
         map(
@@ -184,7 +195,7 @@ fn double_quota_part(input: &str) -> IResult<&str, String, ParserError<'_>> {
     .parse(input)
 }
 
-fn single_quota_part(input: &str) -> IResult<&str, &str, ParserError<'_>> {
+fn single_quota_part(input: &str) -> IResult<&str, &str, RpParseErr<'_>> {
     context(
         "arg_single_quota_part",
         delimited(
@@ -210,7 +221,7 @@ fn normal_escape(c: char) -> Option<&'static str> {
     }
 }
 
-pub(in crate::parse) fn escape(input: &str) -> IResult<&str, String, ParserError<'_>> {
+pub(in crate::parse) fn escape(input: &str) -> IResult<&str, String, RpParseErr<'_>> {
     escaped_trans(none_of("\\"), '\\', normal_escape).parse(input)
 }
 
@@ -219,10 +230,10 @@ pub(in crate::parse) fn escape(input: &str) -> IResult<&str, String, ParserError
 /// 字符，原样保留非转义内容，并且一次性申请String对象。
 fn escaped_trans<'a, F, FO, ExtendItem>(
     normal: F, control_char: char, mut escape: impl FnMut(char) -> Option<&'static str> + 'static,
-) -> impl Parser<&'a str, Output = String, Error = ParserError<'a>>
+) -> impl Parser<&'a str, Output = String, Error = RpParseErr<'a>>
 where
     FO: ExtendInto<Item = ExtendItem, Extender = String>,
-    F: Parser<&'a str, Output = FO, Error = ParserError<'a>>,
+    F: Parser<&'a str, Output = FO, Error = RpParseErr<'a>>,
 {
     map(escaped(normal, control_char, anychar), move |s| {
         let mut result = String::with_capacity(s.len());
@@ -254,7 +265,7 @@ where
 
 pub(in crate::parse) fn parse_usize_range(
     input: &str,
-) -> IResult<&str, (Option<usize>, Option<usize>), ParserError<'_>> {
+) -> IResult<&str, (Option<usize>, Option<usize>), RpParseErr<'_>> {
     verify(separated_pair(context("<start>", opt(usize)), char(','), context("<end>", opt(usize))), |(s, e)| {
         s.is_some() || e.is_some()
     })

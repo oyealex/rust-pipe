@@ -11,7 +11,8 @@ impl<I: Iterator<Item: Debug>, R: Iterator<Item = (Option<usize>, Option<usize>)
     type Item = <I as Iterator>::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.ranges.peek().is_none() { // 如果没有任何范围，就不再继续迭代原始数据了 OPT 增加UT？
+        if self.ranges.peek().is_none() {
+            // 如果没有任何范围，就不再继续迭代原始数据了 OPT 增加UT？
             return None;
         }
         while let Some((idx, item)) = self.source.next() {

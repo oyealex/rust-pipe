@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::parse::token::ParserError;
+use crate::parse::RpParseErr;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::space1;
@@ -9,11 +9,11 @@ use nom::multi::many0;
 use nom::sequence::terminated;
 use nom::{IResult, Parser};
 
-pub(crate) fn parse_configs(input: &str) -> IResult<&str, Vec<Config>, ParserError<'_>> {
+pub(crate) fn parse_configs(input: &str) -> IResult<&str, Vec<Config>, RpParseErr<'_>> {
     context("Config", many0(parse_config)).parse(input)
 }
 
-fn parse_config(input: &str) -> IResult<&str, Config, ParserError<'_>> {
+fn parse_config(input: &str) -> IResult<&str, Config, RpParseErr<'_>> {
     context(
         "Config",
         terminated(

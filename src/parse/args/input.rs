@@ -1,9 +1,10 @@
 use crate::err::RpErr;
 use crate::input::Input;
 use crate::parse::args::{parse_arg, parse_arg1, parse_opt_arg, parse_positive_usize};
+use crate::parse::InputResult;
 use std::iter::Peekable;
 
-pub(in crate::parse::args) fn parse_input(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Input, RpErr> {
+pub(in crate::parse::args) fn parse_input(args: &mut Peekable<impl Iterator<Item = String>>) -> InputResult {
     match args.peek() {
         Some(input) => {
             let lower_input = input.to_ascii_lowercase();
@@ -22,28 +23,28 @@ pub(in crate::parse::args) fn parse_input(args: &mut Peekable<impl Iterator<Item
     }
 }
 
-fn parse_std_in(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Input, RpErr> {
+fn parse_std_in(args: &mut Peekable<impl Iterator<Item = String>>) -> InputResult {
     args.next(); // 消耗命令文本
     Ok(Input::new_std_in())
 }
 
-fn parse_file(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Input, RpErr> {
+fn parse_file(args: &mut Peekable<impl Iterator<Item = String>>) -> InputResult {
     args.next(); // 消耗命令文本
     Ok(Input::new_file(parse_arg1(args, ":file", "file")?))
 }
 
 #[cfg(windows)]
-fn parse_clip(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Input, RpErr> {
+fn parse_clip(args: &mut Peekable<impl Iterator<Item = String>>) -> InputResult {
     args.next(); // 消耗命令文本
     Ok(Input::new_clip())
 }
 
-fn parse_of(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Input, RpErr> {
+fn parse_of(args: &mut Peekable<impl Iterator<Item = String>>) -> InputResult {
     args.next(); // 消耗命令文本
     Ok(Input::new_of(parse_arg1(args, ":of", "value")?))
 }
 
-fn parse_gen(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Input, RpErr> {
+fn parse_gen(args: &mut Peekable<impl Iterator<Item = String>>) -> InputResult {
     args.next(); // 消耗命令文本
     let range = args.next().ok_or_else(|| RpErr::MissingArg { cmd: ":gen", arg: "range" })?;
     match crate::parse::token::input::parse_range_in_gen(&range) {
@@ -60,7 +61,7 @@ fn parse_gen(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Input,
     }
 }
 
-fn parse_repeat(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Input, RpErr> {
+fn parse_repeat(args: &mut Peekable<impl Iterator<Item = String>>) -> InputResult {
     args.next(); // 消耗命令文本
     let value = parse_arg(args).ok_or(RpErr::MissingArg { cmd: ":repeat", arg: "value" })?;
     let count = parse_positive_usize(args);

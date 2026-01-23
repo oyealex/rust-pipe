@@ -2,13 +2,14 @@ use crate::condition::{Condition, Select, TextSelectMode};
 use crate::err::RpErr;
 use crate::parse::args::parse_tag_nocase;
 use crate::parse::token::parse_num;
+use crate::parse::CondResult;
 use nom::character::complete::usize;
 use nom::Parser;
 use std::iter::Peekable;
 
 pub(in crate::parse::args) fn parse_cond(
     args: &mut Peekable<impl Iterator<Item = String>>, cmd: &'static str,
-) -> Result<Condition, RpErr> {
+) -> CondResult {
     let not = parse_tag_nocase(args, "not");
     match args.peek() {
         Some(arg) => match arg.to_ascii_lowercase().as_str() {

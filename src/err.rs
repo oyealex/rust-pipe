@@ -2,75 +2,65 @@ use cmd_help::CmdHelp;
 use std::process::{ExitCode, Termination};
 use thiserror::Error;
 
-#[derive(Error, Debug, Eq, PartialEq, CmdHelp)]
+#[derive(Error, Clone, Debug, Eq, PartialEq, CmdHelp)]
 pub enum RpErr {
     ///  1      解析配置Token失败。
-    #[error("[ParseConfigTokenErr:1] Invalid args: {0:?}")]
-    ParseConfigTokenErr(String),
+    #[error("[ParseTokenErr:1] Parse token err: {0}")]
+    ParseTokenErr(String),
 
-    ///  2      解析输入Token失败。
-    #[error("[ParseInputTokenErr:2] Invalid args: {0:?}")]
-    ParseInputTokenErr(String),
-
-    ///  3      解析操作Token失败。
-    #[error("[ParseOpTokenErr:3] Invalid args: {0:?}")]
-    ParseOpTokenErr(String),
-
-    ///  4      解析输出Token失败。
-    #[error("[ParseOutputTokenErr:4] Invalid args: {0:?}")]
-    ParseOutputTokenErr(String),
-
-    ///  5      参数解析失败。
-    #[error("[ArgParseErr:5] Unable to parse {arg_value:?} in argument `{arg}` of cmd `{cmd}`, error: {error}")]
+    ///  2      参数解析失败。
+    #[error("[ArgParseErr:2] Unable to parse {arg_value:?} in argument `{arg}` of cmd `{cmd}`, error: {error}")]
     ArgParseErr { cmd: &'static str, arg: &'static str, arg_value: String, error: String },
 
-    ///  6      命令缺少有效参数。
-    #[error("[MissingArg:6] Missing valid argument `{arg}` of cmd `{cmd}`")]
+    ///  3      命令缺少有效参数。
+    #[error("[MissingArg:3] Missing valid argument `{arg}` of cmd `{cmd}`")]
     MissingArg { cmd: &'static str, arg: &'static str },
 
-    ///  7      参数内容无法完全解析，存在剩余无法解析的内容。
-    #[error("[UnexpectedRemaining:7] Unexpected remaining value {remaining:?} in argument `{arg}` of cmd `{cmd}`")]
+    ///  4      参数内容无法完全解析，存在剩余无法解析的内容。
+    #[error("[UnexpectedRemaining:4] Unexpected remaining value {remaining:?} in argument `{arg}` of cmd `{cmd}`")]
     UnexpectedRemaining { cmd: &'static str, arg: &'static str, remaining: String },
 
-    ///  8      未知参数。
-    #[error("[UnknownArgs:8] Unknown arguments: {args:?}")]
+    ///  5      未知参数。
+    #[error("[UnknownArgs:5] Unknown arguments: {args:?}")]
     UnknownArgs { args: Vec<String> },
 
-    ///  9      从剪切板读取数据失败。
-    #[error("[ReadClipboardTextErr:9] Read text from clipboard error: {0}")]
+    ///  6      从剪切板读取数据失败。
+    #[error("[ReadClipboardTextErr:6] Read text from clipboard error: {0}")]
     ReadClipboardTextErr(String),
 
-    /// 10      从文件读取数据失败。
-    #[error("[ReadFromFileErr:10] Read line {line_no} of file {file:?} error: {err}")]
+    /// 7      从文件读取数据失败。
+    #[error("[ReadFromFileErr:7] Read line {line_no} of file {file:?} error: {err}")]
     ReadFromFileErr { file: String, line_no: usize, err: String },
 
-    /// 11      写入数据到剪切板失败。
-    #[error("[WriteToClipboardErr:11] Write result to clipboard error: {0}")]
+    /// 8      写入数据到剪切板失败。
+    #[error("[WriteToClipboardErr:8] Write result to clipboard error: {0}")]
     WriteToClipboardErr(String),
 
-    /// 12      打开文件失败。
-    #[error("[OpenFileErr:12] Open output file {file:?} error: {err}")]
+    /// 9      打开文件失败。
+    #[error("[OpenFileErr:9] Open output file {file:?} error: {err}")]
     OpenFileErr { file: String, err: String },
 
-    /// 13      写入数据到文件失败。
-    #[error("[WriteToFileErr:13] Write item {item:?} to file {file:?} error: {err}")]
+    /// 10      写入数据到文件失败。
+    #[error("[WriteToFileErr:10] Write item {item:?} to file {file:?} error: {err}")]
     WriteToFileErr { file: String, item: String, err: String },
 
-    /// 14      格式化字符串失败。
-    #[error("[FormatStringErr:14] Format string by {fmt:?} with {value} error at: {err_pos}")]
+    /// 11      格式化字符串失败。
+    #[error("[FormatStringErr:11] Format string by {fmt:?} with {value} error at: {err_pos}")]
     FormatStringErr { fmt: String, value: String, err_pos: usize },
 
-    /// 15      解析正则表达式失败。
-    #[error("[ParseRegexErr:15] Parse regex from {reg:?} err: {err}")]
+    /// 12      解析正则表达式失败。
+    #[error("[ParseRegexErr:12] Parse regex from {reg:?} err: {err}")]
     ParseRegexErr { reg: String, err: String },
 
-    /// 16      解析数值失败。
-    #[error("[ParseRegexErr:16] Parse number from {0:?} err")]
+    /// 13      解析数值失败。
+    #[error("[ParseRegexErr:13] Parse number from {0:?} err")]
     ParseNumErr(String),
 
-    /// 17      无效的非负整数参数。
-    #[error("[InvalidNonNegativeIntArg:18] Positive integer or zero is required by argument `{arg}` of cmd `{cmd}`, but it is {arg_value:?}")]
-    InvalidNonNegativeIntArg{cmd: &'static str, arg: &'static str, arg_value: String},
+    /// 14      无效的非负整数参数。
+    #[error(
+        "[InvalidNonNegativeIntArg:14] Positive integer or zero is required by argument `{arg}` of cmd `{cmd}`, but it is {arg_value:?}"
+    )]
+    InvalidNonNegativeIntArg { cmd: &'static str, arg: &'static str, arg_value: String },
 }
 
 impl Termination for RpErr {
@@ -89,23 +79,20 @@ impl RpErr {
 
     fn exit_code(&self) -> u8 {
         match self {
-            RpErr::ParseConfigTokenErr(_) => 1,
-            RpErr::ParseInputTokenErr(_) => 2,
-            RpErr::ParseOpTokenErr(_) => 3,
-            RpErr::ParseOutputTokenErr(_) => 4,
-            RpErr::ArgParseErr { .. } => 5,
-            RpErr::MissingArg { .. } => 6,
-            RpErr::UnexpectedRemaining { .. } => 7,
-            RpErr::UnknownArgs { .. } => 8,
-            RpErr::ReadClipboardTextErr(_) => 9,
-            RpErr::ReadFromFileErr { .. } => 10,
-            RpErr::WriteToClipboardErr(_) => 11,
-            RpErr::OpenFileErr { .. } => 12,
-            RpErr::WriteToFileErr { .. } => 13,
-            RpErr::FormatStringErr { .. } => 14,
-            RpErr::ParseRegexErr { .. } => 15,
-            RpErr::ParseNumErr { .. } => 16,
-            RpErr::InvalidNonNegativeIntArg{..} => 17,
+            RpErr::ParseTokenErr(_) => 1,
+            RpErr::ArgParseErr { .. } => 2,
+            RpErr::MissingArg { .. } => 3,
+            RpErr::UnexpectedRemaining { .. } => 4,
+            RpErr::UnknownArgs { .. } => 5,
+            RpErr::ReadClipboardTextErr(_) => 6,
+            RpErr::ReadFromFileErr { .. } => 7,
+            RpErr::WriteToClipboardErr(_) => 8,
+            RpErr::OpenFileErr { .. } => 9,
+            RpErr::WriteToFileErr { .. } => 10,
+            RpErr::FormatStringErr { .. } => 11,
+            RpErr::ParseRegexErr { .. } => 12,
+            RpErr::ParseNumErr { .. } => 13,
+            RpErr::InvalidNonNegativeIntArg { .. } => 14,
         }
     }
 }

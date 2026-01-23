@@ -1,10 +1,10 @@
 use crate::err::RpErr;
 use crate::output::Output;
-use crate::parse::args;
+use crate::parse::{args, OutputResult};
 use args::parse_general_file_info;
 use std::iter::Peekable;
 
-pub(in crate::parse::args) fn parse_output(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Output, RpErr> {
+pub(in crate::parse::args) fn parse_output(args: &mut Peekable<impl Iterator<Item = String>>) -> OutputResult {
     if let Some(to_cmd) = args.peek()
         && to_cmd.eq_ignore_ascii_case(":to")
     {
@@ -27,7 +27,7 @@ pub(in crate::parse::args) fn parse_output(args: &mut Peekable<impl Iterator<Ite
     }
 }
 
-fn parse_file(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Output, RpErr> {
+fn parse_file(args: &mut Peekable<impl Iterator<Item = String>>) -> OutputResult {
     args.next(); // 消耗`file`
     if let Some((file, append, crlf)) = parse_general_file_info(args, false) {
         Ok(Output::new_file(file, append, crlf))
@@ -37,7 +37,7 @@ fn parse_file(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Outpu
 }
 
 #[cfg(windows)]
-fn parse_clip(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Output, RpErr> {
+fn parse_clip(args: &mut Peekable<impl Iterator<Item = String>>) -> OutputResult {
     args.next(); // 消耗`clip`
     let postfix = if let Some(crlf) = args.peek() {
         if crlf.eq_ignore_ascii_case("crlf") {
@@ -55,7 +55,7 @@ fn parse_clip(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Outpu
     Ok(Output::new_clip(postfix))
 }
 
-fn parse_std_out(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Output, RpErr> {
+fn parse_std_out(args: &mut Peekable<impl Iterator<Item = String>>) -> OutputResult {
     args.next(); // 消耗`out`
     Ok(Output::new_std_out())
 }

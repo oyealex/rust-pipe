@@ -1,6 +1,7 @@
 use crate::input::Input;
+use crate::parse::token::parse_integer;
 use crate::parse::token::{arg_exclude_cmd, cmd_arg1};
-use crate::parse::token::{parse_integer, ParserError};
+use crate::parse::RpParseErr;
 use crate::Integer;
 use nom::branch::alt;
 use nom::bytes::complete::tag_no_case;
@@ -11,9 +12,9 @@ use nom::error::context;
 use nom::sequence::{preceded, terminated};
 use nom::{IResult, Parser};
 
-pub(in crate::parse) type InputResult<'a> = IResult<&'a str, Input, ParserError<'a>>;
+pub(in crate::parse) type InputIResult<'a> = IResult<&'a str, Input, RpParseErr<'a>>;
 
-pub(in crate::parse) fn parse_input(input: &str) -> InputResult<'_> {
+pub(in crate::parse) fn parse_input(input: &str) -> InputIResult<'_> {
     context(
         "Input",
         alt((
@@ -30,12 +31,12 @@ pub(in crate::parse) fn parse_input(input: &str) -> InputResult<'_> {
     .parse(input)
 }
 
-fn parse_std_in(input: &str) -> InputResult<'_> {
+fn parse_std_in(input: &str) -> InputIResult<'_> {
     context("Input::StdIn", map((tag_no_case(":in"), context("(trailing_space1)", space1)), |_| Input::new_std_in()))
         .parse(input)
 }
 
-fn parse_file(input: &str) -> InputResult<'_> {
+fn parse_file(input: &str) -> InputIResult<'_> {
     context(
         "Input::File",
         map(terminated(cmd_arg1(":file", "<file>"), context("(trailing_space1)", space1)), |files| {
@@ -46,12 +47,12 @@ fn parse_file(input: &str) -> InputResult<'_> {
 }
 
 #[cfg(windows)]
-fn parse_clip(input: &str) -> InputResult<'_> {
+fn parse_clip(input: &str) -> InputIResult<'_> {
     context("Input::Clip", map((tag_no_case(":clip"), context("(trailing_space1)", space1)), |_| Input::new_clip()))
         .parse(input)
 }
 
-fn parse_of(input: &str) -> InputResult<'_> {
+fn parse_of(input: &str) -> InputIResult<'_> {
     context(
         "Input::Of",
         map(terminated(cmd_arg1(":of", "<text>"), context("(trailing_space1)", space1)), |values| {
@@ -61,7 +62,7 @@ fn parse_of(input: &str) -> InputResult<'_> {
     .parse(input)
 }
 
-fn parse_gen(input: &str) -> InputResult<'_> {
+fn parse_gen(input: &str) -> InputIResult<'_> {
     context(
         "Input::Gen",
         map(
@@ -81,7 +82,7 @@ fn parse_gen(input: &str) -> InputResult<'_> {
     .parse(input)
 }
 
-pub(in crate::parse) fn parse_range_in_gen(input: &str) -> IResult<&str, (Integer, Integer, Integer), ParserError<'_>> {
+pub(in crate::parse) fn parse_range_in_gen(input: &str) -> IResult<&str, (Integer, Integer, Integer), RpParseErr<'_>> {
     map(
         (
             context("<start>", parse_integer), // 必选起始值
@@ -104,7 +105,7 @@ pub(in crate::parse) fn parse_range_in_gen(input: &str) -> IResult<&str, (Intege
     .parse(input)
 }
 
-fn parse_repeat(input: &str) -> InputResult<'_> {
+fn parse_repeat(input: &str) -> InputIResult<'_> {
     context(
         "Input::Repeat",
         map(

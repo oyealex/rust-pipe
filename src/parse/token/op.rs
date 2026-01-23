@@ -3,23 +3,21 @@ use crate::op::trim::{TrimArg, TrimPos};
 use crate::op::{CaseArg, JoinInfo, Op, PeekArg, SortBy, TakeDropMode};
 use crate::parse::token::condition::parse_cond;
 use crate::parse::token::{
-    arg, arg_end, arg_exclude_cmd, general_file_info, parse_arg_as, parse_usize_range, ParserError,
+    arg, arg_end, arg_exclude_cmd, general_file_info, map_res_failure, parse_arg_as, parse_usize_range,
 };
+use crate::parse::{OpIResult, OpsIResult};
 use crate::{Float, Integer};
 use nom::branch::alt;
 use nom::bytes::complete::tag_no_case;
 use nom::character::complete::{space1, usize};
-use nom::combinator::{map, opt, value, verify};
+use nom::combinator::{map, map_res, opt, value, verify};
 use nom::error::context;
 use nom::multi::{many0, many1};
 use nom::sequence::{delimited, preceded, terminated};
-use nom::{IResult, Parser};
+use nom::Parser;
 
 // TODO 2026-01-22 02:10 改造token解析结果，支持传递RpErr
-pub(in crate::parse) type OpsResult<'a> = IResult<&'a str, Vec<Op>, ParserError<'a>>;
-pub(in crate::parse) type OpResult<'a> = IResult<&'a str, Op, ParserError<'a>>;
-
-pub(in crate::parse) fn parse_ops(input: &str) -> OpsResult<'_> {
+pub(in crate::parse) fn parse_ops(input: &str) -> OpsIResult<'_> {
     context(
         "Op",
         many0(alt((
@@ -38,7 +36,7 @@ pub(in crate::parse) fn parse_ops(input: &str) -> OpsResult<'_> {
     .parse(input)
 }
 
-fn parse_peek(input: &str) -> OpResult<'_> {
+fn parse_peek(input: &str) -> OpIResult<'_> {
     context(
         "Op::Peek",
         map(
@@ -62,7 +60,7 @@ fn parse_peek(input: &str) -> OpResult<'_> {
     .parse(input)
 }
 
-fn parse_case(input: &str) -> OpResult<'_> {
+fn parse_case(input: &str) -> OpIResult<'_> {
     context(
         "Op::Case",
         alt((
@@ -74,7 +72,7 @@ fn parse_case(input: &str) -> OpResult<'_> {
     .parse(input)
 }
 
-fn parse_replace(input: &str) -> OpResult<'_> {
+fn parse_replace(input: &str) -> OpIResult<'_> {
     context(
         "Op::Replace",
         map(
@@ -98,7 +96,7 @@ fn parse_replace(input: &str) -> OpResult<'_> {
     .parse(input)
 }
 
-fn parse_trim(input: &str) -> OpResult<'_> {
+fn parse_trim(input: &str) -> OpIResult<'_> {
     context(
         "Op::Trim",
         terminated(
@@ -127,7 +125,7 @@ fn parse_trim(input: &str) -> OpResult<'_> {
                         None => Op::Trim(TrimArg::new_blank(pos)),
                     },
                 ),
-                map(
+                map_res(
                     (
                         alt((
                             value(TrimPos::Both, (tag_no_case(":trimr"), arg_end)),
@@ -136,12 +134,7 @@ fn parse_trim(input: &str) -> OpResult<'_> {
                         )),
                         preceded(space1, context("<regex>", arg_exclude_cmd)),
                     ),
-                    |(pos, regex)| {
-                        Op::Trim(match TrimArg::new_regex(pos, regex) {
-                            Ok(arg) => arg,
-                            Err(rp_err) => rp_err.termination(),
-                        })
-                    },
+                    |(pos, regex)| Ok(Op::Trim(TrimArg::new_regex(pos, regex)?)),
                 ),
             )),
             context("(trailing_space1)", space1), // 结尾空格
@@ -150,7 +143,7 @@ fn parse_trim(input: &str) -> OpResult<'_> {
     .parse(input)
 }
 
-fn parse_slice(input: &str) -> OpResult<'_> {
+fn parse_slice(input: &str) -> OpIResult<'_> {
     context(
         "Op::Slice",
         terminated(
@@ -169,7 +162,7 @@ fn parse_slice(input: &str) -> OpResult<'_> {
                 ),
                 context(
                     "Op::Slice::slice",
-                    map(
+                    map_res_failure(
                         preceded(tag_no_case(":slice"), context("<range>", many1(preceded(space1, parse_usize_range)))),
                         |ranges| {
                             let ranges = ranges
@@ -178,9 +171,10 @@ fn parse_slice(input: &str) -> OpResult<'_> {
                                 .filter(|r| !matches!(r, (Some(s), Some(e)) if s > e))
                                 .collect::<Vec<_>>();
                             if ranges.is_empty() {
-                                RpErr::MissingArg { cmd: ":slice", arg: "range" }.termination();
+                                Err(RpErr::MissingArg { cmd: ":slice", arg: "range" })
+                            } else {
+                                Ok(Op::Slice { ranges })
                             }
-                            Op::Slice { ranges }
                         },
                     ),
                 ),
@@ -191,7 +185,7 @@ fn parse_slice(input: &str) -> OpResult<'_> {
     .parse(input)
 }
 
-fn parse_uniq(input: &str) -> OpResult<'_> {
+fn parse_uniq(input: &str) -> OpIResult<'_> {
     context(
         "Op::Uniq",
         map(
@@ -206,7 +200,7 @@ fn parse_uniq(input: &str) -> OpResult<'_> {
     .parse(input)
 }
 
-fn parse_join(input: &str) -> OpResult<'_> {
+fn parse_join(input: &str) -> OpIResult<'_> {
     context(
         "Op::Join",
         map(
@@ -251,7 +245,7 @@ fn parse_join(input: &str) -> OpResult<'_> {
     .parse(input)
 }
 
-fn parse_take_drop(input: &str) -> OpResult<'_> {
+fn parse_take_drop(input: &str) -> OpIResult<'_> {
     context(
         "Op::TakeDrop",
         alt((
@@ -280,11 +274,11 @@ fn parse_take_drop(input: &str) -> OpResult<'_> {
     .parse(input)
 }
 
-fn parse_count(input: &str) -> OpResult<'_> {
+fn parse_count(input: &str) -> OpIResult<'_> {
     context("Op::Count", map(preceded(tag_no_case(":count"), space1), |_| Op::Count)).parse(input)
 }
 
-fn parse_sort(input: &str) -> OpResult<'_> {
+fn parse_sort(input: &str) -> OpIResult<'_> {
     context(
         "Op::Sort",
         map(

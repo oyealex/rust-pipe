@@ -6,10 +6,11 @@ use crate::parse::args::{
     parse_arg, parse_as, parse_general_file_info, parse_opt_arg, parse_positive_usize, parse_tag_nocase, parse_usize,
 };
 use crate::parse::token::parse_usize_range;
+use crate::parse::{OpOptResult, OpResult, OpsResult};
 use crate::{Float, Integer};
 use std::iter::Peekable;
 
-pub(in crate::parse::args) fn parse_ops(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Vec<Op>, RpErr> {
+pub(in crate::parse::args) fn parse_ops(args: &mut Peekable<impl Iterator<Item = String>>) -> OpsResult {
     let mut ops = vec![];
     while let Some(op) = parse_op(args)? {
         ops.push(op);
@@ -17,7 +18,7 @@ pub(in crate::parse::args) fn parse_ops(args: &mut Peekable<impl Iterator<Item =
     Ok(ops)
 }
 
-fn parse_op(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Option<Op>, RpErr> {
+fn parse_op(args: &mut Peekable<impl Iterator<Item = String>>) -> OpOptResult {
     match args.peek() {
         Some(op) => {
             let lower_op = op.to_ascii_lowercase();
@@ -52,7 +53,7 @@ fn parse_op(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Option<
     }
 }
 
-fn parse_peek(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, RpErr> {
+fn parse_peek(args: &mut Peekable<impl Iterator<Item = String>>) -> OpResult {
     args.next();
     if let Some((file, append, crlf)) = parse_general_file_info(args, true) {
         Ok(Op::Peek(PeekArg::File { file, append, crlf }))
@@ -61,12 +62,12 @@ fn parse_peek(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, R
     }
 }
 
-fn parse_case(case_arg: CaseArg, args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, RpErr> {
+fn parse_case(case_arg: CaseArg, args: &mut Peekable<impl Iterator<Item = String>>) -> OpResult {
     args.next();
     Ok(Op::Case(case_arg))
 }
 
-fn parse_replace(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, RpErr> {
+fn parse_replace(args: &mut Peekable<impl Iterator<Item = String>>) -> OpResult {
     args.next();
     // 被替换字符串必选，直接消耗
     if let Some(from) = parse_arg(args) {
@@ -83,7 +84,7 @@ fn parse_replace(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op
     }
 }
 
-fn parse_trim(pos: TrimPos, char_mode: bool, args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, RpErr> {
+fn parse_trim(pos: TrimPos, char_mode: bool, args: &mut Peekable<impl Iterator<Item = String>>) -> OpResult {
     args.next();
     let pattern = parse_opt_arg(args);
     let nocase = if pattern.is_some() { parse_tag_nocase(args, "nocase") } else { false };
@@ -94,9 +95,7 @@ fn parse_trim(pos: TrimPos, char_mode: bool, args: &mut Peekable<impl Iterator<I
     }))
 }
 
-fn parse_trim_regex(
-    cmd: &'static str, pos: TrimPos, args: &mut Peekable<impl Iterator<Item = String>>,
-) -> Result<Op, RpErr> {
+fn parse_trim_regex(cmd: &'static str, pos: TrimPos, args: &mut Peekable<impl Iterator<Item = String>>) -> OpResult {
     args.next();
     if let Some(regex) = args.next() {
         Ok(Op::Trim(TrimArg::new_regex(pos, regex)?))
@@ -105,19 +104,19 @@ fn parse_trim_regex(
     }
 }
 
-fn parse_limit(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, RpErr> {
+fn parse_limit(args: &mut Peekable<impl Iterator<Item = String>>) -> OpResult {
     args.next();
     let count = parse_usize(":limit", "count", args)?;
     Ok(Op::Slice { ranges: if count == 0 { vec![] } else { vec![(None, Some(count - 1))] } })
 }
 
-fn parse_skip(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, RpErr> {
+fn parse_skip(args: &mut Peekable<impl Iterator<Item = String>>) -> OpResult {
     args.next();
     let count = parse_usize(":skip", "count", args)?;
     Ok(Op::Slice { ranges: vec![(Some(count), None)] })
 }
 
-fn parse_slice(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, RpErr> {
+fn parse_slice(args: &mut Peekable<impl Iterator<Item = String>>) -> OpResult {
     args.next();
     let mut ranges = vec![];
     while let Some(arg) = args.peek()
@@ -132,13 +131,13 @@ fn parse_slice(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, 
     if ranges.is_empty() { Err(RpErr::MissingArg { cmd: ":slice", arg: "range" }) } else { Ok(Op::Slice { ranges }) }
 }
 
-fn parse_uniq(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, RpErr> {
+fn parse_uniq(args: &mut Peekable<impl Iterator<Item = String>>) -> OpResult {
     args.next();
     let nocase = parse_tag_nocase(args, "nocase");
     Ok(Op::Uniq { nocase })
 }
 
-fn parse_join(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, RpErr> {
+fn parse_join(args: &mut Peekable<impl Iterator<Item = String>>) -> OpResult {
     args.next();
     let (join_info, batch) = if let Some(delimiter) = parse_opt_arg(args) {
         if let Some(prefix) = parse_opt_arg(args) {
@@ -161,7 +160,7 @@ fn parse_join(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, R
     Ok(Op::new_join(join_info, batch))
 }
 
-fn parse_drop_or_drop_while(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, RpErr> {
+fn parse_drop_or_drop_while(args: &mut Peekable<impl Iterator<Item = String>>) -> OpResult {
     args.next();
     if let Some(maybe_while) = args.peek()
         && maybe_while.eq_ignore_ascii_case("while")
@@ -173,7 +172,7 @@ fn parse_drop_or_drop_while(args: &mut Peekable<impl Iterator<Item = String>>) -
     }
 }
 
-fn parse_take_or_take_while(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, RpErr> {
+fn parse_take_or_take_while(args: &mut Peekable<impl Iterator<Item = String>>) -> OpResult {
     args.next();
     if let Some(maybe_while) = args.peek()
         && maybe_while.eq_ignore_ascii_case("while")
@@ -185,12 +184,12 @@ fn parse_take_or_take_while(args: &mut Peekable<impl Iterator<Item = String>>) -
     }
 }
 
-fn parse_count(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, RpErr> {
+fn parse_count(args: &mut Peekable<impl Iterator<Item = String>>) -> OpResult {
     args.next();
     Ok(Op::Count)
 }
 
-fn parse_sort(args: &mut Peekable<impl Iterator<Item = String>>) -> Result<Op, RpErr> {
+fn parse_sort(args: &mut Peekable<impl Iterator<Item = String>>) -> OpResult {
     args.next();
     let sort_by = if let Some(sort_by) = args.peek() {
         if sort_by.eq_ignore_ascii_case("num") {
